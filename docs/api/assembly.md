@@ -60,6 +60,13 @@ _Migration of old asp JSON + STL without importing its Panda3D modules._
 - `legacy_asset_inventory(legacy_root, name, *, length_unit)` — Inspect all referenced assets. Missing models remain explicit entries.
 - `load_legacy_assembly(legacy_root, name, *, length_unit)` — Load legacy instances with explicit units; fail on any missing asset.
 
+## `wrs.assembly.contact._sdf_cells`
+_Array kernels for SDF integration; loops run over clipping planes, not cells._
+
+- `split_triangles(triangles)` — Return (N,2,3,3) children using winding-preserving longest-edge bisection.
+- `clip_cells(triangles, scores)` — Clip N triangles by three vertex-linear inequalities (N,3,3).
+- `measure_cells(polygons, counts)` — Compute polygon areas and centroids in one padded triangle-fan batch.
+
 ## `wrs.assembly.contact.analysis`
 _State-explicit contact analysis combining plane regions and mesh witnesses._
 
@@ -99,6 +106,12 @@ _Batched SDF near-band integration with explicit sampling and sign uncertainty._
 - **class `SDFConfig`** — SDF-specific controls; shared tolerances remain in ContactConfig.
 - **class `SDFContactBackend`** — Integrate the near band using a mesh-derived or supplied signed distance field.
   - methods: `cache_key`, `prepare`, `analyze_pair`
+
+## `wrs.assembly.contact.sdf_collision`
+_SDF collision evidence without near bands, normal filtering or polygon assembly._
+
+- **class `SDFCollisionChecker`** — Query mesh collisions using bilateral signed-distance samples and bounds.
+  - methods: `prepare`, `query`
 
 ## `wrs.assembly.geometry.mesh_bvh`
 _CPU triangle BVH and exact primitive witnesses in double precision._

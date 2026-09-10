@@ -4,6 +4,8 @@
 
 多后端扩展已落地，见 [ContactModel / ContactAnalyzer / SDF 协议](contact-backends.zh.md)。新后端实现高层 `ContactBackend`，不受下面旧 `ProximityBackend` 的 BVH 类型约束。原生数据放在 `ContactModel.representations` 中；当前 JSON v1 不序列化这些运行时字段。SDF 输出 `near_band` / `estimated`，active、点/线接触尚未求解，不能将空 active 列表理解成没有真实接触。
 
+2026-09-11 补充：独立距离证据可标记 `pair_diagnostics.active_area={status:known_zero, area_m2:0, reason:...}`；否则为 `not_solved` / null。新增 `SDFCollisionChecker`，返回独立的 `wrs.assembly.sdf_collision/1` 字典与 `separated/penetrating/unknown` 状态，不生成 ContactPatch，不做 near/法向过滤，不调用 mesh 碰撞兜底；支持 mesh-derived 字段，原生场暂显式拒绝。数据项、误差与提前退出语义见 [SDF 碰撞与批量化](sdf-collision-and-vectorization.zh.md)。
+
 M1 实际边界：`SurfacePatch.kind` 为 `plane/general`，`face_ids` 索引 PreparedMesh，原面映射在 `PreparedMesh.source_face_ids`；`Part` 当前用 `part_id` 显示名字、`fixed` 标记固定支撑、`friction` 表示摩擦；`AssemblyState` 当前只有显式 `poses` 与 `world_revision`。夹持、资源、ContactGraph、MotionConfig、StabilityConfig、规划/执行结果留给后续任务。有限开放支撑用显式 `orientation='trusted'` 的 mesh 输入。
 
 ## 包边界

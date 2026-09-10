@@ -257,4 +257,6 @@ flowchart LR
 
 ## 最新诊断
 
+[2026-09-11：细分裁剪批量化、active、Bunny 面积与 49 个 SDF 碰撞姿态](sdf-collision-and-vectorization.zh.md)。新增独立 `SDFCollisionChecker` 和失败边界记录。
+
 [Bunny unknown、A/B 面、STL 锯齿及性能剖析](contact-diagnostics.zh.md)：包含 1 / 0.25 / 0.1 mm 分辨率对比、批量化前后计时及下一步加速方案。

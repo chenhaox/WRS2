@@ -9,10 +9,13 @@ __all__ = ['Assembly', 'AssemblyState', 'ContactAnalysis', 'ContactConfig',
            'Part', 'PreparedMesh', 'Region', 'SurfacePatch', 'load_assembly',
            'save_assembly', 'save_report', 'analyze_pair', 'analyze_contacts',
            'ContactModel', 'ContactAnalyzer', 'ContactBackend', 'MeshContactBackend',
-           'SDFContactBackend', 'SDFConfig', 'GridSDF', 'SignedDistanceField', 'SDFSamples']
+           'SDFContactBackend', 'SDFConfig', 'GridSDF', 'SignedDistanceField', 'SDFSamples', 'SDFCollisionChecker']
 
 
 def __getattr__(name):
+    if name == 'SDFCollisionChecker':
+        from .contact.sdf_collision import SDFCollisionChecker
+        return SDFCollisionChecker
     if name == 'ContactModel':
         from .contact.models import ContactModel
         return ContactModel

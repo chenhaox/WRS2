@@ -8,6 +8,7 @@ from ..geometry.proximity import MeshProximity
 from ..geometry.preprocess import prepare_mesh
 from ..geometry.sdf import SignedDistanceField, Open3DMeshSDF
 from ..geometry.planar import cell_regions
+from ._sdf_cells import split_triangles, clip_cells, measure_cells
 
 
 @dataclass(frozen=True)
@@ -63,39 +64,6 @@ def _triangle_vertex_upper(triangles, targets):
     distance2 = np.einsum('nvej,nvej->nve', displacement, displacement).min(axis=2)
     distance2 = np.where(inside, height*factor, distance2)
     return np.sqrt(np.maximum(distance2.max(axis=1), 0))
-
-
-def _bisect_longest(triangle):
-    """Refine the longest edge without repeatedly splitting already short edges."""
-    edge = int(np.argmax(np.linalg.norm(np.roll(triangle, -1, axis=0)-triangle, axis=1)))
-    a, b, c = triangle[edge], triangle[(edge+1) % 3], triangle[(edge+2) % 3]
-    middle = (a+b)/2
-    return np.array([a, middle, c]), np.array([middle, b, c])
-
-
-def _clip_barycentric(scores):
-    """Clip a triangle by vertex-linear scalar inequalities, in barycentric space."""
-    polygon = np.eye(3)
-    for score in scores:
-        out = []
-        values = polygon @ score
-        for i, b in enumerate(polygon):
-            a, da, db = polygon[i-1], values[i-1], values[i]
-            if (da >= 0) != (db >= 0):
-                out.append(a+(b-a)*da/(da-db))
-            if db >= 0:
-                out.append(b)
-        polygon = np.asarray(out).reshape(-1, 3)
-        if len(polygon) < 3:
-            return np.empty((0, 3))
-    return polygon
-
-
-def _polygon_area_center(poly):
-    triangles = np.array([[poly[0], poly[i], poly[i+1]] for i in range(1, len(poly)-1)])
-    areas = _areas(triangles)
-    total = float(areas.sum())
-    return total, (triangles.mean(1)*areas[:, None]).sum(0)/max(total, np.finfo(float).tiny)
 
 
 class SDFContactBackend:
@@ -208,6 +176,13 @@ class SDFContactBackend:
             # Contradictory mesh/SDF evidence stays explicit rather than allowing
             # an approximate signed query to override a whole-mesh certificate.
             overlap = {'status': 'unknown', 'reason': 'negative_sdf_samples_require_validation'}
+        separation_guard = pa.mesh.geometry_error_m+pb.mesh.geometry_error_m+config.pose_error_m+config.numerical_tol_m
+        active_area = {'status': 'not_solved', 'area_m2': None,
+                       'reason': 'sdf_band_is_not_a_zero_gap_contact_region'}
+        if (not native and overlap['status'] == 'separated' and distance is not None
+                and distance.lower_bound_m > separation_guard):
+            active_area = {'status': 'known_zero', 'area_m2': 0.0,
+                           'reason': 'independent_mesh_distance_exceeds_geometry_and_pose_guard'}
         diag = {'part_a': a.name, 'part_b': b.name, 'contact_backend': self.name,
                 'sdf_a': fa.metadata, 'sdf_b': fb.metadata,
                 'overlap': overlap, 'mesh_overlap_reference': to_dict(reference),
@@ -215,6 +190,7 @@ class SDFContactBackend:
                 'curved_coverage': reports, 'planar_coverage': [],
                 'unresolved_area_m2': sum(r['unresolved_area_m2'] for r in reports),
                 'contact_mode': 'sdf_near_band_estimate',
+                'active_area': active_area,
                 'unsupported_contact_features': ['active_area', 'point_line_contact'],
                 'area_reference': 'supplied_source_mesh',
                 'field_surface_registration': 'sampled_check_for_native_fields'}
@@ -315,62 +291,63 @@ class SDFContactBackend:
             queries += 4*count*fields_per_point
             visited += count
             areas = _areas(triangles)
-            pending = []
-            for j, (tri, ns, face_id) in enumerate(batch):
+            # All cell decisions are array masks. Python only collects retained
+            # polygons and queue records, rather than redoing geometry per cell.
+            phis = values.values_m.reshape(-1, 4)
+            phi = phis[:, 0]
+            signed = values.signed[::4]
+            e = values.error_m.reshape(-1, 4).max(1)+error+cfg.numerical_tol_m
+            valid = values.valid.reshape(-1, 4).all(1)
+            ns = np.asarray([item[1] for item in batch])
+            face_ids = np.asarray([item[2] for item in batch])
+            if source_values is not None:
+                valid &= source_values.valid[::4] & source_values.signed.reshape(-1, 4).all(1)
+                ns = source_values.normals_local[::4] @ ts[:3, :3].T
+                e += source_values.error_m.reshape(-1, 4).max(1)
+            invalid += float(areas[~valid].sum())
+            penetrated = np.flatnonzero(valid & signed & (phi < -e-cfg.penetration_tol_m))
+            if len(penetrated) and negative is None:
+                j = penetrated[0]
+                negative = {'sampling_side': 'b' if reverse else 'a',
+                            'point_world_m': centers[j].tolist(), 'sdf_m': float(phi[j]), 'guard_m': float(e[j])}
+            lower = np.maximum(0, np.maximum(np.abs(phi)-radii-e, global_lower-e))
+            upper = np.abs(phi)+radii+e
+            far = lower > cfg.near_tol_m
+            excluded += float(areas[valid & far].sum())
+            candidate = valid & ~far
+            if mesh_target:
+                upper = np.minimum(upper, witness_uppers+e)
+            nt = (values.normals_local @ tt[:3, :3].T).reshape(-1, 4, 3)
+            margins = -np.einsum('ni,nki->nk', ns, nt)-np.cos(cfg.normal_angle_rad)
+            facing = (margins >= 0).all(1)
+            band_inside = upper <= cfg.near_tol_m
+            sign_unresolved = signed & (lower <= cfg.numerical_tol_m) & (np.abs(phi) > e)
+            refine = candidate & (radii > cfg.surface_resolution_m) & (~band_inside | ~facing | sign_unresolved)
+            if np.any(refine):
+                children = split_triangles(triangles[refine]).reshape(-1, 3, 3)
+                queue.extend(zip(children, np.repeat(ns[refine], 2, axis=0), np.repeat(face_ids[refine], 2)))
+            whole = candidate & ~refine & band_inside & facing
+            for j in np.flatnonzero(whole):
                 k = 4*j
-                sample_slice = slice(k, k+4)
-                area, phi, radius = float(areas[j]), float(values.values_m[k]), float(radii[j])
-                e = float(values.error_m[sample_slice].max())+error+cfg.numerical_tol_m
-                valid = np.all(values.valid[sample_slice]) and (
-                    source_values is None or (source_values.valid[k] and np.all(source_values.signed[sample_slice])))
-                if not valid:
-                    invalid += area
-                    continue
-                source_normals = np.tile(ns, (4, 1))
-                if source_values is not None:
-                    ns = source_values.normals_local[k] @ ts[:3, :3].T
-                    source_normals = np.tile(ns, (4, 1))
-                    e += float(source_values.error_m[sample_slice].max())
-                if values.signed[k] and phi < -e-cfg.penetration_tol_m and negative is None:
-                    negative = {'sampling_side': 'b' if reverse else 'a',
-                                'point_world_m': centers[j].tolist(), 'sdf_m': phi, 'guard_m': e}
-                lower = max(0.0, abs(phi)-radius-e, global_lower-e)
-                upper = abs(phi)+radius+e
-                if lower > cfg.near_tol_m:
-                    excluded += area
-                    continue
-                if mesh_target:
-                    upper = min(upper, float(witness_uppers[j])+e)
-                target_normals = values.normals_local[sample_slice] @ tt[:3, :3].T
-                margins = -np.einsum('ij,ij->i', source_normals, target_normals)-np.cos(cfg.normal_angle_rad)
-                facing = np.all(margins >= 0)
-                band_inside = upper <= cfg.near_tol_m
-                sign_unresolved = values.signed[k] and lower <= cfg.numerical_tol_m and abs(phi) > e
-                if radius > cfg.surface_resolution_m and (not band_inside or not facing or sign_unresolved):
-                    queue.extend((child, ns, face_id) for child in _bisect_longest(tri))
-                    continue
-                if band_inside and facing:
-                    append_cell(tri, centers[j], area, ns, phi, e, lower, upper, bool(values.signed[k]),
-                                values.points_local_m[k] @ tt[:3, :3].T+tt[:3, 3],
-                                target_normals[0], face_id, int(values.face_ids[k]))
-                    continue
-                # Cut the terminal cell at the interpolated distance/normal
-                # thresholds, instead of painting a whole triangle by its centre.
-                vertex_phi = values.values_m[k+1:k+4]
-                bary = _clip_barycentric((cfg.near_tol_m-vertex_phi,
-                                         cfg.near_tol_m+vertex_phi, margins[1:]))
-                if len(bary) < 3:
-                    uncertain += area
-                    continue
-                poly = bary @ tri
-                clipped_area, center = _polygon_area_center(poly)
-                if clipped_area <= cfg.min_area_m2:
-                    uncertain += area
-                    continue
-                clipped_area = min(area, clipped_area)
-                uncertain += area-clipped_area
-                clipped_cells += 1
-                pending.append((poly, center, clipped_area, ns, e, lower, upper, face_id))
+                append_cell(triangles[j], centers[j], float(areas[j]), ns[j], float(phi[j]), float(e[j]),
+                            float(lower[j]), float(upper[j]), bool(signed[j]),
+                            values.points_local_m[k] @ tt[:3, :3].T+tt[:3, 3],
+                            nt[j, 0], int(face_ids[j]), int(values.face_ids[k]))
+            pending = []
+            ids = np.flatnonzero(candidate & ~refine & ~whole)
+            if len(ids):
+                scores = np.stack((cfg.near_tol_m-phis[ids, 1:], cfg.near_tol_m+phis[ids, 1:],
+                                   margins[ids, 1:]), axis=1)
+                polygons, counts = clip_cells(triangles[ids], scores)
+                clipped_areas, clipped_centers = measure_cells(polygons, counts)
+                keep = (counts >= 3) & (clipped_areas > cfg.min_area_m2)
+                clipped_areas = np.minimum(areas[ids], clipped_areas)
+                uncertain += float(areas[ids].sum()-clipped_areas[keep].sum())
+                clipped_cells += int(np.count_nonzero(keep))
+                for row in np.flatnonzero(keep):
+                    j = ids[row]
+                    pending.append((polygons[row, :counts[row]], clipped_centers[row], float(clipped_areas[row]),
+                                    ns[j], float(e[j]), float(lower[j]), float(upper[j]), int(face_ids[j])))
             if pending:
                 points = np.asarray([row[1] for row in pending])
                 query_started = perf_counter()

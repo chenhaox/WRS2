@@ -167,6 +167,7 @@ class MeshSDFTests(unittest.TestCase):
         self.assertTrue(all(p.classification == 'near' for p in patches))
         self.assertFalse(any(p.classification == 'active' for p in result.patches))
         self.assertEqual(result.pair_diagnostics[0]['overlap']['status'], 'separated')
+        self.assertEqual(result.pair_diagnostics[0]['active_area']['status'], 'known_zero')
         for report in result.pair_diagnostics[0]['curved_coverage']:
             self.assertEqual(report['unprocessed_area_m2'], 0)
             total = sum(report[k] for k in ('estimated_band_area_m2', 'excluded_area_m2',
