@@ -102,14 +102,15 @@ class Open3DMeshSDF:
         self._scene = o3d.t.geometry.RaycastingScene()
         self._scene.add_triangles(o3d.core.Tensor(normalized.astype(np.float32)),
                                   o3d.core.Tensor(self.mesh.faces.astype(np.uint32)))
-        self.cache_key = digest(('open3d_mesh_sdf/1', o3d.__version__, self.mesh.geometry_id,
+        self.cache_key = digest(('open3d_mesh_sdf/2', o3d.__version__, self.mesh.geometry_id,
                                  nsamples, open_surface))
 
     @property
     def metadata(self):
-        return {'provider': 'open3d_mesh_sdf/1', 'version': self._o3d.__version__,
+        return {'provider': 'open3d_mesh_sdf/2', 'version': self._o3d.__version__,
                 'representation': 'on_demand_mesh_sdf', 'signed': self._signed,
-                'sign_convention': 'negative_inside', 'normal_source': 'nearest_mesh_face',
+                'sign_convention': 'negative_inside',
+                'normal_source': 'sdf_gradient_away_from_zero; face_normal_at_zero_or_unsigned',
                 'distance_error_model': 'float32_guard_not_certified',
                 'coordinates': 'normalized_local', 'nsamples': self.nsamples}
 
@@ -123,16 +124,26 @@ class Open3DMeshSDF:
         normalized = (points-self._origin)/self._scale
         tensor = self._o3d.core.Tensor(normalized.astype(np.float32))
         hit = self._scene.compute_closest_points(tensor)
-        cp = hit['points'].numpy().astype(float)*self._scale+self._origin
+        hit_normalized = hit['points'].numpy().astype(float)
+        cp = hit_normalized*self._scale+self._origin
         ids = hit['primitive_ids'].numpy().astype(np.int64)
+        displacement = (normalized-hit_normalized)*self._scale
+        distances = np.linalg.norm(displacement, axis=1)
         if self._signed:
-            values = self._scene.compute_signed_distance(tensor, nsamples=self.nsamples).numpy().astype(float)*self._scale
+            # Reuse the nearest-point distance; occupancy supplies only the sign.
+            inside = self._scene.compute_occupancy(tensor, nsamples=self.nsamples).numpy() > .5
+            values = np.where(inside, -distances, distances)
         else:
-            values = np.linalg.norm(cp-points, axis=1)
+            values = distances
         # Unit-scale normalization avoids rounding millimetre features at a
         # kilometre world offset. This guard remains an engineering estimate.
         error = 32*np.finfo(np.float32).eps*self._scale*np.maximum(1, np.linalg.norm(normalized, axis=1))
-        return SDFSamples(values, cp, self.prepared.normals[ids], error,
+        normals = self.prepared.normals[ids].copy()
+        away = (distances > 4*error) & self._signed
+        # At an edge, several nearest triangles share one closest point. Their
+        # face normals may disagree; the SDF gradient is determined by p-q.
+        normals[away] = displacement[away]/values[away, None]
+        return SDFSamples(values, cp, normals, error,
                           np.ones(n, bool), np.full(n, self._signed), ids)
 
 

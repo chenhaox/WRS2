@@ -13,6 +13,7 @@ from wrs.assembly import (Assembly, ContactModel, ContactAnalyzer, ContactConfig
 from wrs.assembly.primitives import box, pose
 from wrs.assembly.visualization import preview_case, write_contact_html
 from contact_demo import cases
+from stl_cases import make_case, FILES
 
 
 def grid_case():
@@ -38,13 +39,13 @@ def grid_case():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--backend', choices=('mesh', 'sdf', 'both'), default='both')
-    parser.add_argument('--case', choices=(*cases(), 'grid'), default='shaft')
+    parser.add_argument('--case', choices=(*cases(), 'grid', *FILES), default='shaft')
     parser.add_argument('--all', action='store_true')
     parser.add_argument('--manifest', type=Path, help='Existing wrs.assembly/1 manifest')
     parser.add_argument('--out-dir', type=Path, default=Path(__file__).with_name('output')/'backends')
     args = parser.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    backends = {'mesh': 'mesh', 'sdf': SDFContactBackend(sdf_config=SDFConfig(open_surface='unsigned'))}
+    backends = {'mesh': 'mesh', 'sdf': SDFContactBackend(sdf_config=SDFConfig(open_surface='unsigned', max_query_points=500000))}
     selected = ('mesh', 'sdf') if args.backend == 'both' else (args.backend,)
     inputs = {}
     for key, (name, description, assembly, config, _) in cases().items():
@@ -53,6 +54,7 @@ def main():
             config = replace(config, surface_resolution_m=.001, max_cells=20000, max_triangle_tests=500000)
         inputs[key] = (name, description, tuple(ContactModel.from_part(p) for p in assembly.parts), config)
     inputs['grid'] = grid_case()
+    inputs.update({key: make_case(key) for key in FILES})
     keys = tuple(inputs) if args.all else (args.case,)
     if args.manifest:
         assembly = load_assembly(args.manifest)

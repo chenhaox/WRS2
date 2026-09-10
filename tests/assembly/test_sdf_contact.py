@@ -15,6 +15,42 @@ def plane_grid(direction=1, offset=0):
 
 
 class GridTests(unittest.TestCase):
+    def test_native_box_corners_do_not_remove_opposing_faces(self):
+        axis = np.linspace(-.008, .008, 81)
+        xyz = np.stack(np.meshgrid(axis, axis, axis, indexing='ij'), axis=-1)
+        q = np.abs(xyz)-.002
+        values = np.linalg.norm(np.maximum(q, 0), axis=-1)+np.minimum(q.max(axis=-1), 0)
+        spacing = float(axis[1]-axis[0])
+        grid = GridSDF(values, [axis[0]]*3, spacing, error_bound_m=np.sqrt(3)*spacing/2)
+        a = ContactModel(box((.004, .004, .004)), 'a', representations={'sdf': grid})
+        b = ContactModel(a.geometry, 'b', pose((0, 0, .005)), {'sdf': grid})
+        backend = SDFContactBackend(sdf_config=SDFConfig(validate_mesh_overlap=False))
+        cfg = ContactConfig(near_tol_m=.002, surface_resolution_m=.0002, normal_angle_rad=.55)
+        result = ContactAnalyzer(backend, config=cfg).analyze_pair(a, b)
+        for side in ('a', 'b'):
+            patches = [p for p in result.patches if p.sampling_side == side]
+            self.assertAlmostEqual(sum(p.area_m2 for p in patches), .004**2, places=12)
+        for report in result.pair_diagnostics[0]['curved_coverage']:
+            self.assertEqual(report['unprocessed_area_m2'], 0)
+
+    def test_tilted_sdf_band_is_clipped_to_analytical_area(self):
+        axis = np.linspace(-.002, .002, 9)
+        x, _, z = np.meshgrid(axis, axis, axis, indexing='ij')
+        slope, offset = .3, .0002
+        norm = np.sqrt(1+slope*slope)
+        field = GridSDF((offset+slope*x-z)/norm, [-.002]*3, .0005, error_bound_m=0)
+        mesh = rectangle((.001, .001), upward=False)
+        vertices = mesh.vertices.copy()
+        vertices[:, 2] = offset+slope*vertices[:, 0]
+        a = ContactModel(rectangle((.001, .001)), 'a', representations={'sdf': plane_grid()})
+        b = ContactModel(MeshData(vertices, mesh.faces, 'trusted'), 'b', representations={'sdf': field})
+        config = ContactConfig(near_tol_m=.0002, surface_resolution_m=.0002, normal_angle_rad=.55)
+        backend = SDFContactBackend(sdf_config=SDFConfig(validate_mesh_overlap=False))
+        report = ContactAnalyzer(backend, config=config).analyze_pair(a, b)
+        area = sum(p.area_m2 for p in report.patches if p.sampling_side == 'a')
+        expected = .001*(.0005+(config.near_tol_m*norm-offset)/slope)
+        self.assertAlmostEqual(area, expected, places=13)
+
     def test_trilinear_sign_gradient_domain_and_immutable_identity(self):
         axes = np.arange(4)*.001
         x, y, z = np.meshgrid(axes, axes, axes, indexing='ij')
@@ -70,6 +106,20 @@ class GridTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('open3d'), 'optional open3d dependency is absent')
 class MeshSDFTests(unittest.TestCase):
+    def test_edge_gradient_does_not_jump_between_cap_and_wall(self):
+        mesh = cylinder(radius=.0098, height=.01, sections=32)
+        _, field = SDFContactBackend().prepare(ContactModel(mesh, 'shaft'))
+        angles = np.arange(128)*2*np.pi/128
+        points = np.column_stack((.01*np.cos(angles), .01*np.sin(angles), np.full(128, .0052)))
+        answer = field.query(points)
+        expected = points-answer.points_local_m
+        expected /= np.linalg.norm(expected, axis=1)[:, None]
+        np.testing.assert_allclose(answer.normals_local, expected, atol=1e-7)
+        self.assertTrue(np.all((answer.normals_local[:, 2] > .62) & (answer.normals_local[:, 2] < .72)))
+        shuffled = MeshData(mesh.vertices, mesh.faces[::-1])
+        _, again = SDFContactBackend().prepare(ContactModel(shuffled, 'reordered'))
+        np.testing.assert_allclose(again.query(points).normals_local, answer.normals_local, atol=1e-5)
+
     def test_box_distances_sign_and_large_local_origin(self):
         offset = np.array([1e6, -2e6, 3e6])
         raw = box()
@@ -108,6 +158,12 @@ class MeshSDFTests(unittest.TestCase):
                                              'boundary_uncertain_area_m2', 'invalid_field_area_m2',
                                              'unprocessed_area_m2'))
             self.assertAlmostEqual(total, report['source_area_m2'], places=11)
+        wall_a = [p for p in result.patches if p.sampling_side == 'a']
+        # Every patch boundary is represented by cut polygons, not a ring of
+        # full-triangle spikes. End extension is limited by the normal angle.
+        all_vertices = np.concatenate([cell for p in wall_a for r in p.regions for cell in r.cells_world_m])
+        self.assertLess(np.max(np.abs(all_vertices[:, 2])), .0055)
+        self.assertTrue(any(len(cell) != 3 for p in wall_a for r in p.regions for cell in r.cells_world_m))
         low = ContactAnalyzer(SDFContactBackend(sdf_config=SDFConfig(max_query_points=8)), config=cfg).analyze_pair(a, b)
         self.assertLessEqual(low.statistics['sdf_query_points'], 8)
         self.assertTrue(all(r['unprocessed_area_m2'] > 0 for r in low.pair_diagnostics[0]['curved_coverage']))
@@ -120,3 +176,18 @@ class MeshSDFTests(unittest.TestCase):
         self.assertEqual(result.pair_diagnostics[0]['overlap']['status'], 'penetrating')
         self.assertTrue(result.pair_diagnostics[0]['negative_sdf_witnesses'])
         self.assertFalse(any(p.classification == 'active' for p in result.patches))
+
+    def test_real_stl_bunny_is_explicitly_unsigned_and_closed_cylinder_signed(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        bunny = ContactModel.from_file(root/'bunny.stl', name='bunny', length_unit='m')
+        with self.assertRaisesRegex(ValueError, 'watertight'):
+            SDFContactBackend().prepare(bunny)
+        _, field = SDFContactBackend(sdf_config=SDFConfig(open_surface='unsigned')).prepare(bunny)
+        self.assertFalse(field.metadata['signed'])
+        real = ContactModel.from_file(root/'examples/l1picking/cylinder.stl', name='cylinder', length_unit='m')
+        _, field = SDFContactBackend().prepare(real)
+        self.assertTrue(field.metadata['signed'])
+        q = field.query([[0, 0, .03], [0, 0, .08]])
+        self.assertLess(q.values_m[0], 0)
+        self.assertGreater(q.values_m[1], 0)
