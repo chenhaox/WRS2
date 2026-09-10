@@ -10,7 +10,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from wrs.assembly import (Assembly, ContactModel, ContactAnalyzer, SDFContactBackend,
-                          SDFConfig, save_report)
+                          SDFConfig, ToleranceContactPolicy, save_report)
 from wrs.assembly.visualization import preview_case, write_contact_html
 from contact_demo import cases
 from stl_cases import make_case, FILES
@@ -22,12 +22,18 @@ def main():
     parser.add_argument('--backend', choices=('mesh', 'sdf', 'both'), default='sdf')
     parser.add_argument('--repeat', type=int, default=3, help='Warm repetitions, each recomputes the band')
     parser.add_argument('--resolution-mm', type=float, help='Override the terminal cell radius; smaller resolves finer boundaries')
+    parser.add_argument('--contact-tol-mm', type=float, default=.5,
+                        help='Extract this proximity band and offer it as tolerance contact')
+    parser.add_argument('--allow-unsigned-contact', action='store_true',
+                        help='Explicitly accept unsigned proximity patches for assembly contact')
     parser.add_argument('--out-dir', type=Path, default=ROOT/'examples/assembly/output/stl')
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error('--repeat must be >=1')
     if args.resolution_mm is not None and (not np.isfinite(args.resolution_mm) or args.resolution_mm <= 0):
         parser.error('--resolution-mm must be finite and positive')
+    if not np.isfinite(args.contact_tol_mm) or args.contact_tol_mm < 1e-7:
+        parser.error('--contact-tol-mm must be finite and >=1e-7')
     args.out_dir.mkdir(parents=True, exist_ok=True)
     # Import overhead is measured once and excluded from per-model cold analysis.
     start = perf_counter()
@@ -45,6 +51,10 @@ def main():
             cfg = replace(cfg, surface_resolution_m=.001, max_cells=60000, max_triangle_tests=500000)
         else:
             label, description, models, cfg = make_case(key)
+        cfg = replace(cfg, near_tol_m=args.contact_tol_mm/1000,
+                      contact_tol_m=min(cfg.contact_tol_m, args.contact_tol_mm/1000))
+        description = description.replace('0.5 mm', f'{args.contact_tol_mm:g} mm')
+        description += f' 本次提取容差带 {args.contact_tol_mm:g} mm；可切换原始分类与装配接触规则。'
         if args.resolution_mm is not None:
             cfg = replace(cfg, surface_resolution_m=args.resolution_mm/1000)
             description += f' 本次覆盖终止单元半径：{args.resolution_mm:g} mm。'
@@ -76,6 +86,9 @@ def main():
                    'providers': [{k: d.get(k) for k in ('sdf_a', 'sdf_b')} for d in result.pair_diagnostics],
                    'config': cfg, 'sdf_config': None if name == 'mesh' else backend.sdf_config}
             rows.append(row)
+            # Preserve geometry and raw classes; add a separate policy result.
+            result = ToleranceContactPolicy(args.contact_tol_mm/1000,
+                                             allow_unsigned=args.allow_unsigned_contact).apply(result)
             save_report(result, args.out_dir/f'{key}.{name}.contacts.json')
             preview = preview_case(f'{label} / {name}', description, assembly, assembly.initial_state(), result)
             preview['benchmark'] = {k: row[k] for k in ('cold_s', 'warm_median_s', 'warm_min_s', 'warm_max_s')}

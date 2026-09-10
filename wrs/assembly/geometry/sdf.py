@@ -94,8 +94,13 @@ class Open3DMeshSDF:
         normalized = (vs-self._origin)/self._scale
         legacy = o3d.geometry.TriangleMesh(o3d.utility.Vector3dVector(normalized),
                                           o3d.utility.Vector3iVector(self.mesh.faces))
+        intersections = legacy.get_self_intersecting_triangles()
+        self._validation = {'closed': bool(prepared.is_closed),
+                            'orientation_reliable': bool(prepared.orientation_reliable),
+                            'watertight': bool(legacy.is_watertight()),
+                            'self_intersection_pairs': len(intersections)}
         self._signed = bool(prepared.is_closed and prepared.orientation_reliable
-                            and legacy.is_watertight() and not legacy.is_self_intersecting())
+                            and self._validation['watertight'] and not len(intersections))
         if not self._signed and open_surface == 'error':
             raise ValueError('SDF needs a watertight, oriented, non-self-intersecting solid; '
                              'use mesh backend or explicitly set open_surface="unsigned"')
@@ -112,7 +117,8 @@ class Open3DMeshSDF:
                 'sign_convention': 'negative_inside',
                 'normal_source': 'sdf_gradient_away_from_zero; face_normal_at_zero_or_unsigned',
                 'distance_error_model': 'float32_guard_not_certified',
-                'coordinates': 'normalized_local', 'nsamples': self.nsamples}
+                'coordinates': 'normalized_local', 'nsamples': self.nsamples,
+                'solid_validation': dict(self._validation)}
 
     def query(self, points_local_m):
         """Return batched distances and mesh witnesses; all output lengths are metres."""

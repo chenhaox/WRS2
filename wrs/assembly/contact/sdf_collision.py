@@ -185,3 +185,46 @@ class SDFCollisionChecker:
         if result['reason'] == 'covered' and result['unresolved_area_m2']:
             result['reason'] = 'resolution_reached_near_zero'
         return result
+
+    def penetration_regions(self, a, b, *, tf_a=None, tf_b=None,
+                            resolution_m=None, max_query_points=None):
+        """Extract both source-surface portions inside the opposite signed solid.
+
+        This optional, separately timed traversal does not change ``query`` or
+        its early-exit performance. It returns estimated polygon surfaces, not
+        an intersection volume, zero-gap contact area, or collision-free proof.
+        An unsigned target makes that side unavailable; the reverse side can
+        still be drawn. Empty output with incomplete coverage is not absence.
+        """
+        from ._penetration_regions import extract_surface
+        start = perf_counter()
+        resolution = self.resolution_m if resolution_m is None else resolution_m
+        budget = self.max_query_points if max_query_points is None else max_query_points
+        if not np.isfinite(resolution) or resolution <= 0:
+            raise ValueError('resolution_m must be finite and positive')
+        if not isinstance(budget, int) or budget < 1:
+            raise ValueError('max_query_points must be a positive integer')
+        ta, tb = checked_tf(a.tf if tf_a is None else tf_a), checked_tf(b.tf if tf_b is None else tf_b)
+        pa, fa = self.prepare(a)
+        pb, fb = self.prepare(b)
+        prepared_at = perf_counter()
+        guard = a.geometry.geometry_error_m+b.geometry.geometry_error_m+1e-10
+        guard += 32*np.finfo(float).eps*max(1., float(np.abs(ta[:3, 3]).max()), float(np.abs(tb[:3, 3]).max()))
+        sides, remaining = [], budget
+        for side, prep, field, ts, tt in (('a', pa, fb, ta, tb), ('b', pb, fa, tb, ta)):
+            found = extract_surface(prep, field, ts, tt, resolution=resolution,
+                                    budget=remaining//2 if side == 'a' else remaining,
+                                    batch_size=self.batch_size, guard=guard, tolerance=self.penetration_tol_m)
+            found['sampling_side'] = side
+            sides.append(found)
+            remaining -= found['query_points']
+        return {'schema_version': 'wrs.assembly.penetration_regions/1',
+                'part_a': a.name, 'part_b': b.name, 'quality': 'estimated',
+                'measure_kind': 'surface_inside_opposite_solid', 'sides': sides,
+                'resolution_m': resolution, 'max_query_points': budget,
+                'query_points': budget-remaining, 'fields': {'a': fa.metadata, 'b': fb.metadata},
+                'state_digest': digest((a.name, a.geometry_key, ta, b.name, b.geometry_key, tb,
+                                        resolution, budget, self.batch_size, self.penetration_tol_m, self._provider_key,
+                                        'penetration_regions/1')),
+                'timing_s': {'prepare': prepared_at-start, 'extraction': perf_counter()-prepared_at,
+                             'total': perf_counter()-start}}

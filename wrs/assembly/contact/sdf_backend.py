@@ -100,7 +100,7 @@ class SDFContactBackend:
             runtime = version('open3d')
         except PackageNotFoundError:
             runtime = None
-        return digest(('sdf_contact/2', self.sdf_config, self.geometry_config, runtime))
+        return digest(('sdf_contact/3', self.sdf_config, self.geometry_config, runtime))
 
     def prepare(self, model):
         """Return cached surface preprocessing and a field in the same local frame.
@@ -378,13 +378,14 @@ class SDFContactBackend:
                 tuple(Region(tuple(rows[i][0] for i in ids), loops) for ids, loops in groups),
                 (min(r[6] for r in rows), max(r[7] for r in rows)), float(weights.sum()),
                 weights=weights, measure_kind='near_band', sampling_side='b' if reverse else 'a',
-                provenance={'backend': 'sdf_adaptive/2', 'sdf_provider': target.metadata,
+                provenance={'backend': 'sdf_adaptive/3', 'sdf_provider': target.metadata,
                             'cell_source_prepared_face_ids': [r[8] for r in rows],
                             'cell_target_provider_face_ids': [r[9] for r in rows],
                             'sample_signed_distances_m': [r[10] for r in rows],
                             'sample_error_guard_m': [r[11] for r in rows],
                             'source_face_ids': sorted({i for r in rows for i in ps.source_face_ids[r[8]]}),
                             'boundary_valid': boundary_ok, 'physical_contact_area': False,
+                            'band_limit_m': cfg.near_tol_m,
                             'normal_test': 'source_cell_interior; target_centre_and_vertices; linear_boundary_clipping',
                             'area_reference': 'source_mesh',
                             'distance_interval': 'signed_sdf' if all(r[12] for r in rows) else 'unsigned'}))

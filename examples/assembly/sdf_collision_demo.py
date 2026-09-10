@@ -58,9 +58,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out-dir', type=Path, default=ROOT/'examples/assembly/output/collision')
     parser.add_argument('--repeat', type=int, default=3)
+    parser.add_argument('--region-resolution-mm', type=float, default=.5,
+                        help='Terminal radius for the separately timed penetration overlay')
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error('--repeat must be positive')
+    if not np.isfinite(args.region_resolution_mm) or args.region_resolution_mm <= 0:
+        parser.error('--region-resolution-mm must be finite and positive')
     (args.out_dir/'models').mkdir(parents=True, exist_ok=True)
     generated = {'box': box((.03, .025, .02)), 'sphere': sphere(.02), 'cylinder': cylinder(.012, .04),
                  'tube': cylinder(.02, .02, inner_radius=.01), 'torus': torus(), 'concave_l': concave_l()}
@@ -84,18 +88,25 @@ def main():
         row = {'case': key, 'expected': expected, 'result': result, 'prepare_s': prepare_s,
                'warm_median_s': float(np.median(times)), 'warm_runs_s': times,
                'faces': [len(m.geometry.faces) for m in models]}
+        # Full region extraction is deliberately outside the fast-query timer.
+        regions = (checker.penetration_regions(*models, resolution_m=args.region_resolution_mm/1000,
+                                               max_query_points=500000)
+                   if result['status'] == 'penetrating' else None)
+        row['penetration_regions'] = regions
         rows.append(row)
         diag = {'part_a': models[0].name, 'part_b': models[1].name, 'contact_backend': 'sdf_collision',
-                'overlap': {'status': result['status']}, 'collision_query': result, 'expected': expected}
+                'overlap': {'status': result['status']}, 'collision_query': result, 'expected': expected,
+                'penetration_regions': regions}
         analysis = ContactAnalysis((), (diag,), result['state_digest'],
                                    statistics={'timing_s': {'backend_total': row['warm_median_s']}})
         assembly = Assembly(tuple(m.as_part() for m in models))
         preview = preview_case(key, description+f' 构造关系：{expected}。查询结果：{result["status"]}。',
                                assembly, assembly.initial_state(), analysis)
         previews.append(preview)
+        if regions:
+            print(f'  {key} overlay: {regions["timing_s"]["total"]:.3f}s; '
+                  f'areas A/B={[round(s["area_m2"]*1e6, 3) for s in regions["sides"]]} mm2', flush=True)
         print(f"{key}: expected={expected}, got={result['status']}, {row['warm_median_s']*1000:.2f}ms, {result['reason']}", flush=True)
-        save_report({'scope': 'discrete collision evidence; no contact areas; warm times exclude STL loading and field preparation',
-                     'python': sys.executable, 'results': rows}, args.out_dir/'results.json')
 
     for key, path in files.items():
         b = ContactModel.from_file(path, name='B', length_unit='m')
@@ -127,6 +138,8 @@ def main():
         '两根薄杆正交穿过；不使用近接法向过滤。', SDFCollisionChecker(), None)
     run('sdf_only_separation', (large, ContactModel(large.geometry, 'B', pose((0, 0, .15)))),
         'separated', '关闭 AABB 快捷路径，用正 SDF 单元下界排除全部源表面。', SDFCollisionChecker(use_aabb=False), None)
+    save_report({'scope': 'discrete collision evidence; optional penetration surfaces separately timed; warm times exclude STL loading, preparation and region extraction',
+                 'python': sys.executable, 'results': rows}, args.out_dir/'results.json')
     write_contact_html(previews, args.out_dir/'contacts.html')
 
 

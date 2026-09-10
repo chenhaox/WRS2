@@ -60,6 +60,11 @@ _Migration of old asp JSON + STL without importing its Panda3D modules._
 - `legacy_asset_inventory(legacy_root, name, *, length_unit)` — Inspect all referenced assets. Missing models remain explicit entries.
 - `load_legacy_assembly(legacy_root, name, *, length_unit)` — Load legacy instances with explicit units; fail on any missing asset.
 
+## `wrs.assembly.contact._penetration_regions`
+_Optional surface portions inside another solid; separate from fast queries._
+
+- `extract_surface(prepared, target, ts, tt, *, resolution, budget, batch_size, guard, tolerance)` — Batch adaptive signed-distance clipping without a facing-normal filter.
+
 ## `wrs.assembly.contact._sdf_cells`
 _Array kernels for SDF integration; loops run over clipping planes, not cells._
 
@@ -100,6 +105,12 @@ _Contact regions from opposing plane patches, without collision manifolds._
 
 - `analyze_planar_pair(part_a, tf_a, prep_a, surface_a, part_b, tf_b, prep_b, surface_b, *, config, budget=None)` — Return (patches, diagnostics) for an opposing pair of bounded planes.
 
+## `wrs.assembly.contact.policy`
+_Explicit assembly contact decisions on top of immutable geometric evidence._
+
+- **class `ToleranceContactPolicy`** — Treat extracted proximity regions as assembly contacts within a tolerance.
+  - methods: `apply`
+
 ## `wrs.assembly.contact.sdf_backend`
 _Batched SDF near-band integration with explicit sampling and sign uncertainty._
 
@@ -111,7 +122,7 @@ _Batched SDF near-band integration with explicit sampling and sign uncertainty._
 _SDF collision evidence without near bands, normal filtering or polygon assembly._
 
 - **class `SDFCollisionChecker`** — Query mesh collisions using bilateral signed-distance samples and bounds.
-  - methods: `prepare`, `query`
+  - methods: `prepare`, `query`, `penetration_regions`
 
 ## `wrs.assembly.geometry.mesh_bvh`
 _CPU triangle BVH and exact primitive witnesses in double precision._

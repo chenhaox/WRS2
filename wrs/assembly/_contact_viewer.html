@@ -18,6 +18,9 @@ canvas{display:block;width:100%;height:calc(100vh - 222px);min-height:420px;touc
 <div class="metric" id="activemetric"><span>实际接触面积 / active</span><b id="area"></b></div><div class="metric"><span>全局实体关系</span><b id="overlap"></b></div>
 <div class="metric"><span id="countlabel">区域记录</span><b id="count"></b></div><div class="metric" title="这是 A/B 双侧不确定性的面积汇总，不是另一块接触面的面积。包括尚未认证法向的已着色面积，不等于未遍历面积，也不表示全部计算错误。"><span>双侧不确定性面积汇总</span><b id="unknown"></b></div>
 <div class="metric"><span>当前侧候选近接带面积</span><b id="neararea"></b></div>
+<div class="metric" id="policymetric" hidden><span>当前侧容差接触面积</span><b id="policyarea"></b></div>
+<div class="metric" id="regionmetric" hidden><span>穿入表面 A / B</span><b id="regionarea"></b></div>
+<div class="metric" id="regiontimemetric" hidden><span>区域提取耗时</span><b id="regiontime"></b></div>
 <div class="metric" title="接触分析耗时，不含文件读取、报告写入和渲染；缓存只复用几何，仍重新计算区域。"><span id="timinglabel">后端计算耗时</span><b id="duration"></b></div>
 <div class="note" id="coverage" role="status"></div>
 <div class="note" id="sideinfo" role="status"></div>
@@ -31,6 +34,13 @@ canvas{display:block;width:100%;height:calc(100vh - 222px);min-height:420px;touc
 const data=JSON.parse(document.getElementById('data').textContent), el=id=>document.getElementById(id);
 const canvas=el('view'),ctx=canvas.getContext('2d'),colors={active:'#078b70',near:'#e89420',interference:'#d74850',unknown:'#8466b4'};
 let current,center,span,yaw=-.65,pitch=.58,zoom=1,selected=-1,drag=null;
+// These controls select precomputed evidence; they never change geometry.
+const toolbar=document.querySelector('.toolbar');
+toolbar.insertAdjacentHTML('beforeend','<label id="policycontrol" hidden><input id="policyview" type="checkbox" checked>容差接触显示</label><label id="unsignedcontrol" hidden><input id="unsignedpolicy" type="checkbox" checked>接受无符号近接面</label><label id="regioncontrol" hidden><input id="regionview" type="checkbox" checked>穿入表面</label><label id="bothcontrol" hidden><input id="bothregions" type="checkbox" checked>穿入面双侧显示</label>');
+document.querySelector('.legend').insertAdjacentHTML('beforeend','<span id="policylegend" hidden><i class="dot" style="background:#167bb9"></i>容差接触</span>');
+const accepted=p=>el('policyview').checked&&p.provenance?.contact_policy?.is_contact===true&&
+    (p.provenance?.distance_interval!=='unsigned'||el('unsignedpolicy').checked);
+const fillColor=p=>accepted(p)?'#167bb9':colors[p.classification];
 const sub=(a,b)=>a.map((x,i)=>x-b[i]),add=(a,b)=>a.map((x,i)=>x+b[i]);
 function project(p){const q=sub(p,center),u=Math.cos(yaw)*q[0]-Math.sin(yaw)*q[1],v=Math.sin(yaw)*q[0]+Math.cos(yaw)*q[1],s=Math.min(canvas.clientWidth,canvas.clientHeight)*.7/span*zoom;return [canvas.clientWidth/2+s*u,canvas.clientHeight/2+s*(Math.sin(pitch)*v-Math.cos(pitch)*q[2]),Math.cos(pitch)*v+Math.sin(pitch)*q[2]];}
 function path(points){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));}
@@ -42,9 +52,29 @@ const visible=current.analysis.patches.filter(p=>p.measure_kind!=='near_band'||p
 const collision=current.analysis.pair_diagnostics.find(d=>d.collision_query)?.collision_query;if(collision){el('coverage').textContent='独立碰撞查询：'+collision.reason+'。unknown 表示符号、分辨率或预算不足以判定，不能解释为无碰撞。';el('sideinfo').textContent='本页不提取 near 带或实际接触面积。负 SDF 点提供穿入证据；正样本本身不能证明整体分离。';el('colorinfo').textContent='红点是源表面穿入目标的证据，或两物体内部的公共点。它不是接触面的面积。判定来源与字段有效性保存在 JSON 报告中。';}
 const commands=[];
 if(collision?.witness)commands.push({ps:[project(collision.witness.point_world_m)],fill:colors.interference,alpha:1,width:2});
+const penetration=current.analysis.pair_diagnostics.find(d=>d.penetration_regions)?.penetration_regions;
+if(collision){
+ const shown=penetration?.sides.filter(s=>(el('bothregions').checked&&!el('sourceonly').checked)||s.sampling_side===side)||[];
+ el('regionmetric').hidden=!penetration;el('regiontimemetric').hidden=!penetration;
+ el('regionarea').textContent=penetration?penetration.sides.map(s=>s.status==='unavailable'?'不可判':(s.area_m2*1e6).toFixed(2)).join(' / ')+' mm²':'';
+ el('regiontime').textContent=penetration?penetration.timing_s.total.toFixed(3)+' s':'';
+ el('sideinfo').textContent=penetration?'红色填充是零件表面穿入另一实体内部的部分；A/B 独立提取，可双侧显示。它是表面区域，不是交集体积，也不是接触面积。':'本例尚未发现穿透证据，因此没有提取穿入表面。unknown 仍不能解释为已证明分离。';
+ el('colorinfo').textContent=penetration?'红点是快速查询证据；红面来自另一次完整区域遍历，耗时单独列出。'+(penetration.sides.some(s=>s.status==='unavailable')?' 无符号目标侧无法提取内部区域；反向仍可显示。':'')+(penetration.sides.some(s=>s.status==='incomplete')?' 区域提取预算耗尽或字段无效；仅显示已求得部分。':'')+(penetration.sides.every(s=>!s.cells_world_m.length)?' 没有可绘制的严格内部表面；完全重合时可能只有公共内部点。':''):'本页显示离散姿态碰撞结果。零间隙接触不一定产生负 SDF，详见判定原因。';
+ if(penetration&&el('regionview').checked)shown.forEach(s=>s.cells_world_m.forEach(c=>commands.push({ps:c.map(project),fill:colors.interference,alpha:.88,line:colors.interference,width:.35})));
+}
+const policy=current.analysis.pair_diagnostics.find(d=>d.contact_policy)?.contact_policy;
+el('policymetric').hidden=!policy;el('policylegend').hidden=!policy||!el('policyview').checked;
+if(policy){
+ const area=visible.filter(accepted).reduce((s,p)=>s+p.area_m2,0);
+ const undecided=visible.some(p=>p.provenance?.contact_policy?.is_contact===null||(p.provenance?.distance_interval==='unsigned'&&!el('unsignedpolicy').checked));
+ el('policyarea').textContent=el('policyview').checked?(area===0&&undecided?'未定':(area*1e6).toFixed(2)+' mm²'+(undecided?' + 未定':'')):'未启用显示';
+ el('policymetric').title='按显式装配规则接受的当前侧区域面积；不改变实际 active 面积或实体相交关系。';
+ el('sideinfo').textContent+=' 接触容差 '+(policy.contact_tol_m*1000).toFixed(3)+' mm。';
+ if(el('policyview').checked)el('colorinfo').textContent='蓝色表示按容差接受的装配接触。原始几何分类保留；紫色边界表示该蓝面采用了无符号距离假设。关闭「容差接触显示」可恢复原始颜色。'+(unsigned&&!el('unsignedpolicy').checked?' 无符号区域尚未接受，仍为紫色 unknown。':'');
+}
 const shownParts=new Set(current.analysis.pair_diagnostics.map(d=>side==='a'?d.part_a:d.part_b));if(el('meshes').checked)current.meshes.filter(m=>!el('sourceonly').checked||shownParts.has(m.id)).forEach((m,i)=>m.faces.forEach(f=>commands.push({ps:f.map(j=>project(m.vertices[j])),fill:i%2?'#819ebc':'#bac7d2',alpha:.1,line:'#8a9dab',width:.3})));
 current.analysis.patches.forEach((p,i)=>{if(p.measure_kind==='near_band'&&p.sampling_side!==(el('sideb').checked?'b':'a'))return;const opacity=selected<0||selected===i?.74:.13;
-p.regions.forEach(r=>{r.cells_world_m.forEach(c=>commands.push({ps:c.map(project),fill:colors[p.classification],alpha:opacity,line:null,width:2}));if(el('boundaries').checked)r.boundary_loops_world_m.forEach(c=>commands.push({ps:[...c,c[0]].map(project),line:colors[p.classification],alpha:.95,width:2,loop:true}));});
+p.regions.forEach(r=>{r.cells_world_m.forEach(c=>commands.push({ps:c.map(project),fill:fillColor(p),alpha:opacity,line:null,width:2}));if(el('boundaries').checked)r.boundary_loops_world_m.forEach(c=>commands.push({ps:[...c,c[0]].map(project),line:accepted(p)&&p.provenance?.distance_interval!=='unsigned'?fillColor(p):colors[p.classification],alpha:.95,width:2,loop:true}));});
 if(el('normals').checked){const points=p.sampling_side==='b'?p.points_b_world_m:p.points_a_world_m,normals=p.sampling_side==='b'?p.normals_b_world:p.normals_a_world;const step=Math.max(1,Math.ceil(points.length/20));for(let j=0;j<points.length;j+=step){const a=points[j],b=add(a,normals[j].map(x=>x*span*.06));commands.push({ps:[project(a),project(b)],line:colors[p.classification],alpha:1,width:1.5,loop:true});}}});
 commands.sort((a,b)=>a.ps.reduce((s,p)=>s+p[2],0)/a.ps.length-b.ps.reduce((s,p)=>s+p[2],0)/b.ps.length);
 for(const c of commands){ctx.globalAlpha=c.alpha;ctx.lineWidth=c.width;if(c.ps.length===1){ctx.beginPath();ctx.arc(c.ps[0][0],c.ps[0][1],4,0,2*Math.PI);ctx.fillStyle=c.fill;ctx.fill();continue;}path(c.ps);if(c.ps.length>2&&!c.loop){ctx.closePath();ctx.fillStyle=c.fill;ctx.fill();}if(c.line||c.ps.length===2){ctx.strokeStyle=c.line||c.fill;ctx.stroke();}}
@@ -54,7 +84,14 @@ function choose(index){current=data[index];selected=-1;zoom=1;const vertices=cur
 const timings=a.statistics?.timing_s?[a.statistics.timing_s]:(a.statistics?.pairs||[]).map(p=>p.timing_s).filter(Boolean),seconds=current.benchmark?.warm_median_s??(timings.length?timings.reduce((s,t)=>s+t.backend_total,0):null);el('timinglabel').textContent=current.benchmark?'缓存复用耗时 / 中位数':'后端计算耗时';el('duration').textContent=seconds===null?'未记录':seconds.toFixed(3)+' s';
 const hasSDF=a.pair_diagnostics.some(d=>d.contact_backend==='sdf'),zero=hasSDF&&a.pair_diagnostics.every(d=>d.active_area?.status==='known_zero');el('area').textContent=zero?'0.00 mm²':hasSDF?'未求解':(a.patches.filter(p=>p.dimension===2&&p.classification==='active').reduce((s,p)=>s+p.area_m2,0)*1e6).toFixed(2)+' mm²';el('activemetric').title=zero?'独立网格距离检查确认正间隙超过几何与位姿误差，因此实际接触面积为零。':hasSDF?'SDF 后端尚未提取零间隙接触区域；不能用 near 带面积替代，也不能将未求解当作零。':'已识别的 active 区域面积。';el('overlap').textContent=[...new Set(a.pair_diagnostics.map(d=>d.overlap.status))].join(', ');el('count').textContent=a.patches.length;el('unknown').textContent=(a.pair_diagnostics.reduce((s,d)=>s+(d.unresolved_area_m2||0),0)*1e6).toFixed(2)+' mm²';el('patches').replaceChildren();el('detail').textContent='';
 const collision=a.pair_diagnostics.find(d=>d.collision_query)?.collision_query;el('activemetric').hidden=!!collision;el('neararea').parentElement.hidden=!!collision;el('unknown').parentElement.hidden=!!collision;el('countlabel').textContent=collision?'SDF 查询点数':'区域记录';if(collision){el('count').textContent=collision.query_points;el('detail').textContent=JSON.stringify(collision,null,2);}
+const policy=a.pair_diagnostics.find(d=>d.contact_policy)?.contact_policy;
+el('policycontrol').hidden=!policy;el('unsignedcontrol').hidden=!policy?.allow_unsigned;
+el('regioncontrol').hidden=!collision;el('bothcontrol').hidden=!collision;
+el('regionmetric').hidden=true;el('regiontimemetric').hidden=true;
+if(collision)el('timinglabel').textContent='快速碰撞查询耗时';
+el('unsignedpolicy').checked=!!policy?.allow_unsigned;
 a.patches.forEach((p,i)=>{const b=document.createElement('button');b.className='patch';b.style.borderLeftColor=colors[p.classification];b.textContent=`${p.part_a} ↔ ${p.part_b} · ${p.sampling_side.toUpperCase()} 面 · ${p.classification} · ${p.dimension}D · ${(p.area_m2*1e6).toFixed(2)} mm²`;b.onclick=()=>{selected=selected===i?-1:i;if(selected>=0&&p.measure_kind==='near_band')el('sideb').checked=p.sampling_side==='b';document.querySelectorAll('.patch').forEach((x,j)=>x.classList.toggle('selected',j===selected));el('detail').textContent=selected<0?'':JSON.stringify({quality:p.quality,measure_kind:p.measure_kind,sampling_side:p.sampling_side,gap_interval_mm:p.gap_interval_m.map(x=>x*1000),regions:p.regions.length,provenance:p.provenance},null,2);draw();};el('patches').append(b);});draw();}
 data.forEach((d,i)=>el('cases').add(new Option(d.name,i)));el('cases').onchange=()=>choose(+el('cases').value);['meshes','sourceonly','normals','boundaries','sideb'].forEach(id=>el(id).onchange=draw);el('iso').onclick=()=>{yaw=-.65;pitch=.58;zoom=1;draw();};el('top').onclick=()=>{yaw=0;pitch=Math.PI/2;draw();};el('bottom').onclick=()=>{yaw=0;pitch=-Math.PI/2;draw();};
-canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*.008;pitch=Math.max(-1.5,Math.min(1.57,pitch+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY];draw();};canvas.onpointerup=canvas.onpointercancel=()=>drag=null;canvas.onwheel=e=>{e.preventDefault();zoom=Math.max(.25,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));draw();};new ResizeObserver(draw).observe(canvas);choose(0);
+['policyview','unsignedpolicy','regionview','bothregions'].forEach(id=>el(id).onchange=draw);
+canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*.008;pitch=Math.max(-1.5,Math.min(1.57,pitch+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY];draw();};canvas.onpointerup=canvas.onpointercancel=()=>drag=null;canvas.onwheel=e=>{e.preventDefault();zoom=Math.max(.25,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));draw();};new ResizeObserver(draw).observe(canvas);const initial=Math.max(0,data.findIndex(d=>d.analysis.pair_diagnostics.some(x=>x.penetration_regions?.sides.some(s=>s.cells_world_m.length))));el('cases').value=initial;choose(initial);
 </script></html>

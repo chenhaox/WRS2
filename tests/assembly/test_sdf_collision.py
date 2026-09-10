@@ -64,6 +64,42 @@ class CollisionTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 SDFCollisionChecker(**kwargs)
 
+    def test_penetration_regions_match_box_surface_areas_and_pose_overrides(self):
+        a = ContactModel(box((.02, .02, .02)), 'a')
+        b = ContactModel(box((.02, .03, .03)), 'b')
+        checker = SDFCollisionChecker()
+        result = checker.penetration_regions(a, b, tf_b=pose((.01, 0, 0)), resolution_m=.0005)
+        self.assertLessEqual(result['query_points'], checker.max_query_points)
+        for side, expected in zip(result['sides'], (.0012, .0004)):
+            self.assertEqual(side['unprocessed_area_m2'], 0)
+            self.assertAlmostEqual(side['area_m2'], expected, delta=1e-6)
+            area = 0
+            for polygon in side['cells_world_m']:
+                p = np.asarray(polygon)
+                area += np.linalg.norm(np.cross(p[1:-1]-p[0], p[2:]-p[0]), axis=1).sum()/2
+            self.assertAlmostEqual(area, side['area_m2'], places=12)
+        self.assertEqual(b.tf[0, 3], 0)
+
+    def test_penetration_region_unsigned_side_containment_and_budget(self):
+        plane = ContactModel(rectangle((.01, .01)), 'plane')
+        solid = ContactModel(box(), 'solid')
+        checker = SDFCollisionChecker(open_surface='unsigned')
+        result = checker.penetration_regions(plane, solid)
+        self.assertAlmostEqual(result['sides'][0]['area_m2'], .0001, places=12)
+        self.assertEqual(result['sides'][1]['status'], 'unavailable')
+        self.assertEqual(result['sides'][1]['cells_world_m'], [])
+        b = ContactModel(box((.01, .01, .01)), 'b')
+        inside = checker.penetration_regions(solid, b, resolution_m=.001)
+        self.assertAlmostEqual(inside['sides'][1]['area_m2'], .0006, places=12)
+        same = checker.penetration_regions(solid, ContactModel(solid.geometry, 'same'))
+        self.assertEqual(same['query_points'], 0)
+        self.assertTrue(all(s['reason'] == 'coincident_mesh_surfaces' and s['area_m2'] == 0 for s in same['sides']))
+        limited = checker.penetration_regions(solid, b, max_query_points=4)
+        self.assertLessEqual(limited['query_points'], 4)
+        self.assertTrue(any(s['unprocessed_area_m2'] > 0 for s in limited['sides']))
+        with self.assertRaises(ValueError):
+            checker.penetration_regions(plane, solid, resolution_m=0)
+
 
 class CellKernelsTests(unittest.TestCase):
     def test_clipped_area_centroid_winding_and_empty_cells(self):

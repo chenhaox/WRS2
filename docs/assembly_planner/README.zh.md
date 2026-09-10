@@ -2,7 +2,7 @@
 
 状态：**M1（00—03）已实现并验收；M2/M3 待实施**。2026-09-10。
 
-最新更新：[SDF 轴孔边界修正、真实 STL 与实测耗时](sdf-stl-validation.zh.md)。
+最新更新：[容差接触规则与穿入表面显示](tolerance-contact-and-penetration.zh.md)。此前：[SDF 批量化与碰撞测试](sdf-collision-and-vectorization.zh.md)、[轴孔边界修正与真实 STL](sdf-stl-validation.zh.md)。
 
 先看 [M1 使用方法、例子与交接](m1.zh.md) 和新增的 [ContactModel 多后端与 SDF 设计](contact-backends.zh.md)。现已提供 mesh / SDF 两个算法后端、Open3D 网格字段与原生 GridSDF 输入。当前交付是独立接触几何分析，不包含装配序列、静力稳定性或机器人执行求解。
 

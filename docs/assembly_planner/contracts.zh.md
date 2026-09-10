@@ -152,6 +152,12 @@ validate_execution(plan, workcell, *, config) -> ExecutionResult
 
 ## 缓存、可重复性与并行
 
+容差近接可以通过独立 `ToleranceContactPolicy` 显式接受为装配接触，详见
+[容差接触与穿入表面](tolerance-contact-and-penetration.zh.md)。此策略在 provenance 和 pair diagnostics
+中附加判断，保留原始 classification / quality / overlap / active 面积；不改变上述实际承载语义。
+`SDFCollisionChecker.penetration_regions()` 另返回 `wrs.assembly.penetration_regions/1`，
+记录双侧穿入表面单元、面积、预算与不确定性；无符号目标侧标记 unavailable，不能当作零穿入。
+
 - 几何缓存 key：几何摘要 + 预处理配置 + 后端版本。
 - contact key：A/B 几何、相对姿态、误差/公差、状态/几何 revision。若缓存的是世界坐标结果，还需世界位姿；否则缓存局部结果并重新变换。
 - 稳定性 key：部件集合、位姿、重力、质量/COM、摩擦、接触激活模式、支撑状态和配置。
