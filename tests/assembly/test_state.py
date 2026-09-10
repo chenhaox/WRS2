@@ -31,4 +31,3 @@ class StateTests(unittest.TestCase):
         for arr in (prep.normals,prep.areas_m2,surfaces[0].face_ids,backend.index(mesh).nodes[0].lo):
             with self.assertRaises(ValueError):
                 arr.setflags(write=True)
-
