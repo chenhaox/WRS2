@@ -66,15 +66,39 @@ _State-explicit contact analysis combining plane regions and mesh witnesses._
 - `analyze_pair(part_a, tf_a, part_b, tf_b, *, config=None, backend=None)` — Analyze real surfaces at explicit poses; region/contact/solid states differ.
 - `analyze_contacts(assembly, state, *, config=None, backend=None)` — Analyze present instances, preserving their explicit poses and design mates.
 
+## `wrs.assembly.contact.backends`
+_Public contact backend protocol, explicit selection and reusable analysis._
+
+- `resolve_backend(backend)` — Resolve built-in names or a ContactBackend object; imports stay lazy.
+- **class `ContactBackend`** — High-level extension point; custom backends return the shared report schema.
+  - methods: `cache_key`, `analyze_pair`
+- **class `MeshContactBackend`** — Adapter around the existing plane-clipping/adaptive-mesh implementation.
+  - methods: `cache_key`, `analyze_pair`
+- **class `ContactAnalyzer`** — Reusable headless entry point; compiled local geometry is cached by backend.
+  - methods: `analyze_pair`, `analyze`
+
 ## `wrs.assembly.contact.mesh`
 _Adaptive, bidirectional near-surface bands with explicit unresolved area._
 
 - `analyze_mesh_pair(part_a, tf_a, prep_a, surface_a, part_b, tf_b, prep_b, surface_b, *, config, backend, budget, distance_lower_bound_m=0.0)` — Return near-band estimates and per-side coverage diagnostics.
 
+## `wrs.assembly.contact.models`
+_Backend-neutral contact inputs; geometry is local and all lengths are metres._
+
+- **class `ContactModel`** — An immutable surface plus optional native backend representations.
+  - methods: `geometry_key`, `at`, `as_part`, `from_part`, `from_file`, `from_arrays`, `from_scene_object`
+
 ## `wrs.assembly.contact.planar`
 _Contact regions from opposing plane patches, without collision manifolds._
 
 - `analyze_planar_pair(part_a, tf_a, prep_a, surface_a, part_b, tf_b, prep_b, surface_b, *, config, budget=None)` — Return (patches, diagnostics) for an opposing pair of bounded planes.
+
+## `wrs.assembly.contact.sdf_backend`
+_Batched SDF near-band integration with explicit sampling and sign uncertainty._
+
+- **class `SDFConfig`** — SDF-specific controls; shared tolerances remain in ContactConfig.
+- **class `SDFContactBackend`** — Integrate the near band using a mesh-derived or supplied signed distance field.
+  - methods: `cache_key`, `prepare`, `analyze_pair`
 
 ## `wrs.assembly.geometry.mesh_bvh`
 _CPU triangle BVH and exact primitive witnesses in double precision._
@@ -118,6 +142,17 @@ _Bounded CPU surface-distance queries and explicit solid-overlap diagnostics._
   - methods: `prepare`, `index`, `closest_points`, `pair_distance`, `classify_overlap`
 - **class `MeshProximity`** — Reusable bounded caches of local BVHs/preprocessing, never of world poses.
   - methods: `prepare`, `index`, `closest_points`, `pair_distance`, `point_location`, `classify_overlap`
+
+## `wrs.assembly.geometry.sdf`
+_Signed-distance providers: negative inside, positive outside, local SI units._
+
+- **class `SDFSamples`** — Batch values, projected witnesses and outward normals in a local frame.
+- **class `SignedDistanceField`** — Immutable runtime extension point for mesh, grid or analytical fields.
+  - methods: `metadata`, `query`
+- **class `Open3DMeshSDF`** — On-demand mesh SDF, without a voxel grid or point-cloud conversion.
+  - methods: `metadata`, `query`
+- **class `GridSDF`** — An externally supplied regular SDF grid with trilinear interpolation.
+  - methods: `cache_key`, `metadata`, `query`
 
 ## `wrs.assembly.geometry.surfaces`
 _Smooth components classified by whole-region plane residual and normal spread._

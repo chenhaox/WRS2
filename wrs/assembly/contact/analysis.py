@@ -14,6 +14,11 @@ def analyze_pair(part_a, tf_a, part_b, tf_b, *, config=None, backend=None):
     Returns geometric evidence even when global overlap is unknown. Callers
     must inspect pair_diagnostics before treating a patch as an allowable mate.
     """
+    from .backends import ContactAnalyzer, ContactBackend
+    from .models import ContactModel
+    if (isinstance(backend, (str, ContactBackend))
+            or isinstance(part_a, ContactModel) or isinstance(part_b, ContactModel)):
+        return ContactAnalyzer(backend, config=config).analyze_pair(part_a, part_b, tf_a=tf_a, tf_b=tf_b)
     cfg = config or ContactConfig()
     backend = backend or MeshProximity(numerical_tol_m=cfg.numerical_tol_m)
     if part_a.part_id == part_b.part_id:
@@ -77,6 +82,13 @@ def analyze_pair(part_a, tf_a, part_b, tf_b, *, config=None, backend=None):
 
 def analyze_contacts(assembly, state, *, config=None, backend=None):
     """Analyze present instances, preserving their explicit poses and design mates."""
+    from .backends import ContactAnalyzer, ContactBackend
+    if isinstance(backend, (str, ContactBackend)):
+        from dataclasses import replace
+        result = ContactAnalyzer(backend, config=config).analyze(assembly.parts, poses=state.poses)
+        mates = tuple(m for m in assembly.mating_relations if m.part_a in state.poses and m.part_b in state.poses)
+        return replace(result, mating_relations=mates,
+                       state_digest=digest((result.state_digest, state.world_revision)))
     cfg = config or ContactConfig()
     backend = backend or MeshProximity(numerical_tol_m=cfg.numerical_tol_m)
     by_id = {p.part_id: p for p in assembly.parts}

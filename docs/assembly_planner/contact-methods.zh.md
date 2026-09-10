@@ -30,6 +30,8 @@ Drake hydroelastic 会生成接触面与压力场；刚性/柔顺表示和压力
 
 当前 M1 是自建的 NumPy/SciPy mesh 基线，未调用 CGAL、Open CASCADE 或 MuJoCo 来提取接触区域，也尚未与成熟几何内核做综合性能/鲁棒性对照。
 
+后续更新：现已增加 `ContactAnalyzer("sdf")`，使用 Open3D 网格 SDF 或外部 GridSDF；mesh 基线仍可独立选择。接口、已验证范围和误差限制见 [多后端与 SDF 实现](contact-backends.zh.md)。下面四步描述原 mesh 后端，不能当作新 SDF 后端的实现说明。
+
 1. 清理网格、建立邻接、按整体残差判断 plane/general。
 2. 平面：真实三角形投影与凸裁剪、单元拼接、孔/多组件、仿射 gap 分带。
 3. 曲面：BVH 最近点、双向三角细分、法线筛选，重建距离阈值内的区域。

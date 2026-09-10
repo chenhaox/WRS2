@@ -21,3 +21,6 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 include = ['one*', 'wrs*']
+
+[project.optional-dependencies]
+assembly-sdf = ['open3d>=0.19']

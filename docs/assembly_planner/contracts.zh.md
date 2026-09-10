@@ -2,6 +2,8 @@
 
 本文件约束不同对话的模块边界。输入 schema 为 `wrs.assembly/1`，分析输出为 `wrs.assembly.contact/1`。M1 的实际类型以 `wrs/assembly/model.py` 和 [M1 交接](m1.zh.md) 为准。下表和包布局仍包含 04—10 的未来接口，不代表全部符号都已经存在。
 
+多后端扩展已落地，见 [ContactModel / ContactAnalyzer / SDF 协议](contact-backends.zh.md)。新后端实现高层 `ContactBackend`，不受下面旧 `ProximityBackend` 的 BVH 类型约束。原生数据放在 `ContactModel.representations` 中；当前 JSON v1 不序列化这些运行时字段。SDF 输出 `near_band` / `estimated`，active、点/线接触尚未求解，不能将空 active 列表理解成没有真实接触。
+
 M1 实际边界：`SurfacePatch.kind` 为 `plane/general`，`face_ids` 索引 PreparedMesh，原面映射在 `PreparedMesh.source_face_ids`；`Part` 当前用 `part_id` 显示名字、`fixed` 标记固定支撑、`friction` 表示摩擦；`AssemblyState` 当前只有显式 `poses` 与 `world_revision`。夹持、资源、ContactGraph、MotionConfig、StabilityConfig、规划/执行结果留给后续任务。有限开放支撑用显式 `orientation='trusted'` 的 mesh 输入。
 
 ## 包边界
