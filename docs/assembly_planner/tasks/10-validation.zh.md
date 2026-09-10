@@ -16,7 +16,7 @@
 4. 旧 planner 的接触或序列结果只作对照；不要把旧算法所有判断都设为新实现的 golden truth。用新几何证据解释差异。
 5. 性能记录机器/依赖、网格大小、候选数、距离查询、预算、冷/热缓存、耗时和峰值内存；测量后再制定回归阈值。
 6. 跨 seed/三角化/整体刚体变换/单位转换/公差扫描检查结果稳定性；曲面显示随细分收敛和 unresolved 比例。
-7. 验证干净环境只安装核心依赖可运行 M1/M2；完整 WRS 环境运行 08 的演示。实际产物与 schema 版本一同保存，输出文件可重建。
+7. 全部验收使用指定解释器 `D:\code\venv312\.venv\Scripts\python.exe`。对 M1/M2 用隔离子进程阻断可选模块导入，验证核心依赖边界；使用同一解释器的完整依赖运行 08 的演示。实际产物与 schema 版本一同保存，输出文件可重建。
 8. 更新 API 索引和简洁教程，检查 examples/fixtures 不依赖旧电脑绝对路径。旧源码路径只允许作为显式 migration 参数。
 
 ## 完成标准
@@ -31,9 +31,10 @@
 
 ```text
 在 D:\code\ch\asp\WRS2 实施 docs/assembly_planner/tasks/10-validation.zh.md。
+统一使用 D:\code\venv312\.venv\Scripts\python.exe；安装依赖用该解释器的 -m pip，先核对 sys.executable，不另建虚拟环境。
 先读 README.zh.md、contracts.zh.md 和已完成任务的交接，按实际状态区分 M1/M2/M3；不要把可选或未完成能力算成功。
 建立 analyze_contacts / plan_assembly 使用入口、解析/真实 mesh/端到端回归及可复现性能报告。迁移 domino_5、burrpuzzle 时先核验单位和物理参数，bridge 缺件保持明确失败。
-旧算法是对照而非真值，必须保留孔、间隙、法线场、穿透和 unknown 的验证。记录干净环境运行命令、版本、seed、实际输出及局限，补齐 API 索引和使用教程。
+旧算法是对照而非真值，必须保留孔、间隙、法线场、穿透和 unknown 的验证。记录指定解释器的运行命令、核心依赖隔离检查、版本、seed、实际输出及局限，补齐 API 索引和使用教程。
 ```
 
 ## 交接记录

@@ -19,6 +19,32 @@
 
 每个新对话先阅读本文件、[接口约定](contracts.zh.md)，再只执行对应任务文档。本轮没有创建额外对话，也没有实现这些未来 API。
 
+## 统一 Python 解释器
+
+用户指定本项目开发、依赖检查、安装、测试、API 索引生成和示例运行统一使用：
+
+```text
+D:\code\venv312\.venv\Scripts\python.exe
+```
+
+不要依赖 PATH 中的 `python` / `pip`、`py -3.12` 或 IDE 自动选择；IDE 也指向上述路径。无需重新创建项目 `.venv`。并行 worktree 使用同一解释器，但应从各自工作目录运行并核对 `wrs.__file__`，避免共享环境中的 editable install 指向另一个 checkout；依赖安装/升级串行处理。
+
+PowerShell 命令约定（先进入当前任务的 WRS2 checkout）：
+
+```powershell
+$assemblyPython = 'D:\code\venv312\.venv\Scripts\python.exe'
+& $assemblyPython -c "import sys; print(sys.executable); print(sys.version)"
+& $assemblyPython -m pip --version
+# 以下命令在相应任务建立测试和示例后执行：
+& $assemblyPython -m unittest discover -s tests/assembly -p 'test_*.py'
+& $assemblyPython tools/gen_api_index.py
+# 需要安装依赖时也通过 & $assemblyPython -m pip 调用。
+```
+
+2026-09-10 已读取该解释器及环境包元数据：Python **3.12.0**，NumPy **1.26.4**，SciPy **1.16.2**，MuJoCo **3.5.0**，wgpu **0.32.0**，rendercanvas **2.7.2**，glfw **2.10.0**，xacro **2.1.1**，urdf-parser-py **0.0.4**。这是环境快照，不代表 WRS 仿真、GPU 或所有库的运行兼容性已通过验证；本次没有安装或升级依赖。
+
+此前“缺少 MuJoCo”的检查使用的是系统默认 Python，不适用于此指定环境。后续任务以这里的解释器为准，仍需验证纯分析模块不依赖物理/显示/CAD 的导入边界。
+
 ## 核心决策
 
 **把 contact surface 重建为独立的几何分析层：从真实表面得到接触区域、间隙、法线场及误差，再交给不同的规划器使用。**
@@ -145,7 +171,7 @@ n_A · [(v_B + ω_B × r_B) - (v_A + ω_A × r_A)] >= 0
 
 MuJoCo 的标准 mesh 碰撞使用凸几何，相关约束可查[官方 collision detection 文档](https://mujoco.readthedocs.io/en/stable/computation/index.html#collision-detection)。外部运动检查与分析模型必须对齐，否则“孔被凸包填平”会让正确插入被拒绝。
 
-WRS 根 `__init__.py` 当前 eager import 物理、grasp、viewer 等模块。本机检查时 Python 3.12 有 NumPy/SciPy，但缺少 MuJoCo。任务 00 应解决纯分析模块的导入边界，并验证已有 `from wrs import ...` 公共入口；本轮未运行 WRS 仿真。
+WRS 根 `__init__.py` 当前 eager import 物理、grasp、viewer 等模块。指定解释器已有 MuJoCo 等包，但任务 00 仍应解决纯分析模块的导入边界，并验证已有 `from wrs import ...` 公共入口；本轮未运行 WRS 仿真。
 
 ## 分对话实施顺序
 
@@ -214,11 +240,11 @@ flowchart LR
 
 ## 跨对话交接规则
 
-1. 每个对话打开开发仓库，读取三份文件：本计划、contracts、自己的 task。核对 branch 和工作区变化，保留已有工作。
+1. 每个对话打开开发仓库，读取三份文件：本计划、contracts、自己的 task。核对 branch、工作区变化和指定解释器的 `sys.executable`，保留已有工作。
 2. 顺序执行时在同一开发分支推进。并行执行时从同一个**已提交**的前置基线创建独立 worktree，记录基线 commit；不能让多个对话同时切换同一目录的分支。
 3. 修改范围以 task 为准。发现契约缺项，先提出最小具体修订并同步相关任务；不能另起一套同名数据类型或偷偷改单位/法线含义。
 4. 每项交付实现、可复现的验收命令、实际输出和失败边界。在各 task 文档末尾记录完成 commit、契约版本及下一任务所需信息。不要把未运行的 GUI、仿真或机器人检查写成通过。
-5. 新增公共 API 后运行 `python tools/gen_api_index.py`；并行开发时由整合任务统一生成，避免整份索引相互覆盖。
+5. 新增公共 API 后运行 `& 'D:\code\venv312\.venv\Scripts\python.exe' tools/gen_api_index.py`；并行开发时由整合任务统一生成，避免整份索引相互覆盖。
 6. `.gitignore` 当前广泛忽略 JSON/NPZ/图像；fixture 优先由确定性生成器创建。需要跟踪的 fixture 单独添加窄范围例外，不能依赖未跟踪的本地文件。
 
 各 task 已附完整启动提示词。建议先开一个对话执行 00，完成并形成可复用基线后再执行 01；先通过 M1，再继续后续规划工作。

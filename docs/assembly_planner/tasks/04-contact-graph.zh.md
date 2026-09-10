@@ -30,6 +30,7 @@
 
 ```text
 在 D:\code\ch\asp\WRS2 实施 docs/assembly_planner/tasks/04-contact-graph.zh.md。
+统一使用 D:\code\venv312\.venv\Scripts\python.exe；安装依赖用该解释器的 -m pip，先核对 sys.executable，不另建虚拟环境。
 先读 README.zh.md、contracts.zh.md、02/03 的实际交接。建立实例级 contact graph 和基于接触法线场的平移/twist 候选。
 严格使用 contracts 的法线方向、twist 参考点、gap 与结果语义；不要平均法线，不要把 mating 或 near 当成 active 承载接触。
 保持局部约束与有限运动验证的边界，带状态/几何/公差的缓存必须可验证。完成对应解析与缓存验收后记录交接。

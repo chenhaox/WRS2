@@ -32,6 +32,7 @@
 
 ```text
 在 D:\code\ch\asp\WRS2 实施 docs/assembly_planner/tasks/05-stability.zh.md。
+统一使用 D:\code\venv312\.venv\Scripts\python.exe；安装依赖用该解释器的 -m pip，先核对 sys.executable，不另建虚拟环境。
 先读 README.zh.md、contracts.zh.md 和 04 交接。这次实现独立静力平衡/扰动检查与支撑需求，不实现机器人或序列搜索。
 只使用已激活的真实 contact 区域，正确处理内力等大反向、COM 力矩、摩擦锥和孔洞。near/unknown 接触不能承载，辅助机械手不能默认为免费无限刚性固定。
 用 SciPy HiGHS 建立可复现基线，区分平衡可行、物理不可行与数值未知；执行解析验收并交接结构化结果和假设。

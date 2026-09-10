@@ -31,6 +31,7 @@
 
 ```text
 在 D:\code\ch\asp\WRS2 实施 docs/assembly_planner/tasks/07-sequence.zh.md。
+统一使用 D:\code\venv312\.venv\Scripts\python.exe；安装依赖用该解释器的 -m pip，先核对 sys.executable，不另建虚拟环境。
 先读 README.zh.md、contracts.zh.md，以及 05/06 的实际交接。只实现带支撑资源的序列搜索与结果/replay，不重写 contact detector 或机器人规划器。
 以 assembly-by-disassembly 为搜索组织方式，保持完整状态/缓存，调用真实几何与平衡 evaluator。反转时必须处理路径方向和支撑事件并重验正向步骤。
 从确定性有预算 DFS 起步，明确单件拆除范围、unknown/预算耗尽和执行未验证状态。完成本任务验收和下游交接。

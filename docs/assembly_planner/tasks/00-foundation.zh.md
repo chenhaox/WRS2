@@ -4,7 +4,7 @@
 
 ## 目标和修改范围
 
-建立一个能在 Python 3.12 + NumPy/SciPy 环境独立导入、验证输入和运行小型测试的 `wrs.assembly`。实现 [contracts](../contracts.zh.md) 中本阶段需要的核心模型；后续结果类型至少固定字段语义和协议，不写虚假的成功实现。
+使用指定解释器 `D:\code\venv312\.venv\Scripts\python.exe`，建立仅依赖 Python 3.12 + NumPy/SciPy 即可独立导入、验证输入和运行小型测试的 `wrs.assembly`。实现 [contracts](../contracts.zh.md) 中本阶段需要的核心模型；后续结果类型至少固定字段语义和协议，不写虚假的成功实现。
 
 负责 `wrs/assembly/model.py`、`io.py`、`adapters/legacy.py`、轻量包入口、`tests/assembly/fixtures.py`、`test_io.py`。为解决父包 eager import，可有针对性地修改 `wrs/__init__.py` 并保留现有公开入口兼容性。必要的依赖/fixture ignore 例外归本任务管理。
 
@@ -22,7 +22,7 @@
 - mm 和 m 两份同一模型经导入产生相同 canonical 几何和 pose；旋转用非交换的三轴例子核验旧 convention。
 - 非有限值、非法三角索引、坏矩阵、重复实例 ID、未声明 STL 单位得到可读错误。
 - 同一 mesh 的两个零件实例可以有不同 pose；改变外部输入数组不会改变已构建模型。
-- 没有 MuJoCo、CAD 和显示环境时可以导入分析模块并运行 `test_io.py`。
+- 用指定解释器的隔离子进程阻断 MuJoCo、CAD 和显示模块导入后，仍可导入分析模块并运行 `test_io.py`；不通过卸载现有包或换解释器来验证。
 - 在相应依赖齐全的环境验证已有 `from wrs import wvw, wsso, wssop, Grasp, MotionData` 等公共导出；未具备环境的检查明确记未测，不伪装成兼容性验证通过。
 - 交付供后续任务使用的 fixture API、数据 schema 示例和实际运行命令。
 
@@ -30,6 +30,7 @@
 
 ```text
 在 D:\code\ch\asp\WRS2 的 codex/assembly-planner 开发分支实施任务 00。
+统一使用 D:\code\venv312\.venv\Scripts\python.exe；安装依赖用该解释器的 -m pip，先核对 sys.executable，不另建虚拟环境。
 先读 docs/assembly_planner/README.zh.md、contracts.zh.md 和 tasks/00-foundation.zh.md，以及仓库适用说明。
 这次只建立数据契约、输入/单位、旧数据清单、无界面导入边界与 fixture，不实现 contact detector 或 planner。
 检查当前工作区并保留已有修改；未来 API 以 contracts 为单一约定。核心测试不能依赖 Panda3D、MuJoCo、viewer 或 CAD。

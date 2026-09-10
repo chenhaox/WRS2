@@ -31,6 +31,7 @@
 
 ```text
 在 D:\code\ch\asp\WRS2 实施 docs/assembly_planner/tasks/02-planar-contact.zh.md。
+统一使用 D:\code\venv312\.venv\Scripts\python.exe；安装依赖用该解释器的 -m pip，先核对 sys.executable，不另建虚拟环境。
 先读 README.zh.md、contracts.zh.md、00/01 交接及本任务。仅实现平面 contact surface 和必要的二维裁剪。
 使用真实三角形覆盖的投影交集、对应点 gap 和明确公差，保留凹形、孔、多组件及线/点接触；不要调用 Bullet/MuJoCo/FCL 来决定 contact patch。
 特别测试倾斜表面只能局部接近的情况，不能用平均平面距离把整面当成接触。局部面分析不得伪装成全局无穿透证明。

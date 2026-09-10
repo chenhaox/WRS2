@@ -32,6 +32,7 @@
 
 ```text
 在 D:\code\ch\asp\WRS2 实施 docs/assembly_planner/tasks/03-proximity.zh.md。
+统一使用 D:\code\venv312\.venv\Scripts\python.exe；安装依赖用该解释器的 -m pip，先核对 sys.executable，不另建虚拟环境。
 先读 README.zh.md、contracts.zh.md 和 00/01 交接。任务 02 可能同时进行，只写本任务声明的文件范围。
 建立真实 mesh BVH/最近点/overlap 协议及曲面自适应 contact 分析。不能把顶点 KD-tree 当表面距离，不能把稀疏采样阴性当成无接触证明，也不能对开放 mesh 使用未经验证的 signed distance。
 完整包含、edge-edge 距离、细小接触、法线场和预算耗尽是必须验收的场景。以结构化证据、误差/覆盖和 unknown 边界为交付标准。

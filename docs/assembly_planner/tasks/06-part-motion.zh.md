@@ -31,6 +31,7 @@
 
 ```text
 在 D:\code\ch\asp\WRS2 实施 docs/assembly_planner/tasks/06-part-motion.zh.md。
+统一使用 D:\code\venv312\.venv\Scripts\python.exe；安装依赖用该解释器的 -m pip，先核对 sys.executable，不另建虚拟环境。
 先读 README.zh.md、contracts.zh.md、03/04 的实际交接。这次只做零件 SE(3) 拆除路径与验证，不做机器人 IK 或序列搜索。
 把局部 motion candidates 与有限路径验证分开，使用真实 mesh 距离、包含/穿透证据和自适应边验证。允许初始预期接触，但不能全局忽略配合零件。
 处理 tangent 接触、窄通道、远处障碍与旋转中间碰撞，报告实际验证级别、预算和 unknown；不要把离散采样宣称为连续碰撞证明。

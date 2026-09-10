@@ -152,11 +152,14 @@ validate_execution(plan, workcell, *, config) -> ExecutionResult
 
 ## 验收命令的约定
 
-下面是任务 00 建立测试目录后使用的命令，不是本轮已运行结果：
+所有任务统一使用 `D:\code\venv312\.venv\Scripts\python.exe`，包括依赖安装（`-m pip`）、测试和示例。不要切换系统 Python 或新建另一套虚拟环境。每次交接记录 `sys.executable`、相关包版本和实际加载的 WRS checkout。
+
+下面是任务 00 建立测试目录后，在当前任务 checkout 中使用的 PowerShell 命令，不是本轮已运行结果：
 
 ```powershell
-python -m unittest discover -s tests/assembly -p 'test_*.py'
-python tools/gen_api_index.py
+$assemblyPython = 'D:\code\venv312\.venv\Scripts\python.exe'
+& $assemblyPython -m unittest discover -s tests/assembly -p 'test_*.py'
+& $assemblyPython tools/gen_api_index.py
 ```
 
-具体任务添加自己能独立运行的测试文件和命令。核心测试必须在没有 MuJoCo、CAD、显示器和机器人连接时运行；环境扩展用单独集成测试，缺少依赖时显式 skip 并报告未测范围。迁移旧数据只读取已核验 JSON/mesh；不把 `pickle.load` / `eval` 作为新格式入口。
+具体任务添加自己能独立运行的测试文件和命令。核心测试必须验证不依赖 MuJoCo、CAD、显示器和机器人连接；指定环境已经安装部分可选包，可在同一解释器的隔离子进程中阻断可选模块导入来验收，不卸载用户环境中的包。环境扩展用单独集成测试，缺少依赖时显式 skip 并报告未测范围。迁移旧数据只读取已核验 JSON/mesh；不把 `pickle.load` / `eval` 作为新格式入口。

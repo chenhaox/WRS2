@@ -10,7 +10,7 @@
 
 ## 实施步骤
 
-1. 在目标 Python/Windows 环境核验 OCP 或 pythonocc 的可安装版本及官方 API；选一个后端先实现，不把两个都设为核心依赖。
+1. 在 `D:\code\venv312\.venv\Scripts\python.exe` 的 Python/Windows 环境核验 OCP 或 pythonocc 的可安装版本及官方 API；选一个后端先实现，不把两个都设为核心依赖。兼容性问题记录为 CAD 后端限制，不自动切换解释器。
 2. 从 STEP assembly 读取单位、零件实例及其 placement。保留原 TopoDS face、surface 参数、trim loops、面方向和 CAD tolerance；为绘图生成 mesh 时保存 face 映射。
 3. 对 plane-plane 进行真实 trim 区域交集和 gap 分析；处理孔、多组件、反向 face orientation 和近似共面。
 4. 对 cylinder-cylinder 检查轴线/半径/轴向与角度覆盖，并处理周期 seam。正径向间隙是 mating/near，不能直接产生 active 承载接触。
@@ -29,6 +29,7 @@
 
 ```text
 在 D:\code\ch\asp\WRS2 实施 docs/assembly_planner/tasks/09-cad.zh.md。
+统一使用 D:\code\venv312\.venv\Scripts\python.exe；安装依赖用该解释器的 -m pip，先核对 sys.executable，不另建虚拟环境。
 先读 README.zh.md、contracts.zh.md、02/03 的后端交接；为现有 contact 协议增加可选 STEP/B-Rep 后端。
 先核验目标环境可用的 OCP/pythonocc 版本和官方 API，再实现实例/单位/trim/面方向导入、平面接触和圆柱配合。最短距离只是证据之一，不等于接触区域。
 保留孔、多组件、周期 seam 和 CAD face 追溯；正间隙 mating 不得当成承载接触。保持核心无 CAD 依赖，生成小 STEP fixture 做验收，并记录 mesh/CAD 精度对照与能力边界。

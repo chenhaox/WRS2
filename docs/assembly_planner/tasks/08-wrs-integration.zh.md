@@ -32,6 +32,7 @@
 
 ```text
 在 D:\code\ch\asp\WRS2 实施 docs/assembly_planner/tasks/08-wrs-integration.zh.md。
+统一使用 D:\code\venv312\.venv\Scripts\python.exe；安装依赖用该解释器的 -m pip，先核对 sys.executable，不另建虚拟环境。
 先读 README.zh.md、contracts.zh.md 和 07 交接；本次把计划接到 WRS SceneObject、grasp/reasoner、Arm/Recipe/Workcell，并完成模拟 replay 和可视化。
 重点检查 sobj.tf @ visual.loc_tf、多 visual、持物碰撞、孔/凹槽的凸包近似、精密插入缓存和区域级 ContactPolicy。不能靠全局 exclude 配合件让规划通过。
 正向执行要验证 IK/抓取与支撑切换，未验证的执行不可标成功。保持已有 WRS 接口兼容，运行受影响示例，记录实际环境和验收证据。不要发送实机控制命令。

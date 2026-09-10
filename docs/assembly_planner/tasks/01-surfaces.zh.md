@@ -30,6 +30,7 @@
 
 ```text
 在 D:\code\ch\asp\WRS2 实施 docs/assembly_planner/tasks/01-surfaces.zh.md。
+统一使用 D:\code\venv312\.venv\Scripts\python.exe；安装依赖用该解释器的 -m pip，先核对 sys.executable，不另建虚拟环境。
 先读 README.zh.md、contracts.zh.md、任务 00 的交接和本任务；检查 00 的接口和测试已经存在。
 实现独立的 mesh 预处理与表面 patch：整体平面残差、法线方向、全部边界环/孔和 source face ID 追溯是重点。
 不要用邻接法线传递闭包冒充平面判断，也不要用凸包填孔。保持纯 NumPy/SciPy、无界面依赖。
