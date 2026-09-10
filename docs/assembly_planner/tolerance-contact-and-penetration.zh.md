@@ -2,6 +2,8 @@
 
 2026-09-11；分支 `codex/assembly-planner`。统一解释器：`D:\code\venv312\.venv\Scripts\python.exe`。
 
+后续补充：[Touching 判定与点、线、面显示](touching.zh.md)。其中新增独立支撑平面接触路径；本文末尾 14 个 touch 返回 unknown 是该补充前的历史结果。
+
 ## 为什么以前碰撞页没有红色相交面
 
 `SDFCollisionChecker.query()` 只需要找到一个可靠的负距离点，就可返回 `penetrating`。它之前返回的是红色证据点，没有提取区域。现在新增独立调用：

@@ -157,6 +157,9 @@ validate_execution(plan, workcell, *, config) -> ExecutionResult
 中附加判断，保留原始 classification / quality / overlap / active 面积；不改变上述实际承载语义。
 `SDFCollisionChecker.penetration_regions()` 另返回 `wrs.assembly.penetration_regions/1`，
 记录双侧穿入表面单元、面积、预算与不确定性；无符号目标侧标记 unavailable，不能当作零穿入。
+开启独立几何路径后，`SDFCollisionChecker.query()` 还可返回 `touching / nominal_mesh`；
+证据必须包含完整网格的分离支撑平面及表面交集。`touch_regions()` 的点、线、面提取见
+[Touching 约定](touching.zh.md)。纯 SDF 近零样本不会单独触发 touching。
 
 - 几何缓存 key：几何摘要 + 预处理配置 + 后端版本。
 - contact key：A/B 几何、相对姿态、误差/公差、状态/几何 revision。若缓存的是世界坐标结果，还需世界位姿；否则缓存局部结果并重新变换。

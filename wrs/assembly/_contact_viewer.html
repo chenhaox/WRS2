@@ -21,6 +21,8 @@ canvas{display:block;width:100%;height:calc(100vh - 222px);min-height:420px;touc
 <div class="metric" id="policymetric" hidden><span>当前侧容差接触面积</span><b id="policyarea"></b></div>
 <div class="metric" id="regionmetric" hidden><span>穿入表面 A / B</span><b id="regionarea"></b></div>
 <div class="metric" id="regiontimemetric" hidden><span>区域提取耗时</span><b id="regiontime"></b></div>
+<div class="metric" id="touchmetric" hidden><span>接触维度</span><b id="touchkind"></b></div>
+<div class="metric" id="touchtestmetric" hidden><span>接触几何检查</span><b id="touchtests"></b></div>
 <div class="metric" title="接触分析耗时，不含文件读取、报告写入和渲染；缓存只复用几何，仍重新计算区域。"><span id="timinglabel">后端计算耗时</span><b id="duration"></b></div>
 <div class="note" id="coverage" role="status"></div>
 <div class="note" id="sideinfo" role="status"></div>
@@ -37,6 +39,7 @@ let current,center,span,yaw=-.65,pitch=.58,zoom=1,selected=-1,drag=null;
 // These controls select precomputed evidence; they never change geometry.
 const toolbar=document.querySelector('.toolbar');
 toolbar.insertAdjacentHTML('beforeend','<label id="policycontrol" hidden><input id="policyview" type="checkbox" checked>容差接触显示</label><label id="unsignedcontrol" hidden><input id="unsignedpolicy" type="checkbox" checked>接受无符号近接面</label><label id="regioncontrol" hidden><input id="regionview" type="checkbox" checked>穿入表面</label><label id="bothcontrol" hidden><input id="bothregions" type="checkbox" checked>穿入面双侧显示</label>');
+toolbar.insertAdjacentHTML('beforeend','<label id="touchcontrol" hidden><input id="touchview" type="checkbox" checked>接触点 / 线 / 面</label>');
 document.querySelector('.legend').insertAdjacentHTML('beforeend','<span id="policylegend" hidden><i class="dot" style="background:#167bb9"></i>容差接触</span>');
 const accepted=p=>el('policyview').checked&&p.provenance?.contact_policy?.is_contact===true&&
     (p.provenance?.distance_interval!=='unsigned'||el('unsignedpolicy').checked);
@@ -53,6 +56,7 @@ const collision=current.analysis.pair_diagnostics.find(d=>d.collision_query)?.co
 const commands=[];
 if(collision?.witness)commands.push({ps:[project(collision.witness.point_world_m)],fill:colors.interference,alpha:1,width:2});
 const penetration=current.analysis.pair_diagnostics.find(d=>d.penetration_regions)?.penetration_regions;
+const touching=current.analysis.pair_diagnostics.find(d=>d.touch_regions)?.touch_regions;
 if(collision){
  const shown=penetration?.sides.filter(s=>(el('bothregions').checked&&!el('sourceonly').checked)||s.sampling_side===side)||[];
  el('regionmetric').hidden=!penetration;el('regiontimemetric').hidden=!penetration;
@@ -61,6 +65,21 @@ if(collision){
  el('sideinfo').textContent=penetration?'红色填充是零件表面穿入另一实体内部的部分；A/B 独立提取，可双侧显示。它是表面区域，不是交集体积，也不是接触面积。':'本例尚未发现穿透证据，因此没有提取穿入表面。unknown 仍不能解释为已证明分离。';
  el('colorinfo').textContent=penetration?'红点是快速查询证据；红面来自另一次完整区域遍历，耗时单独列出。'+(penetration.sides.some(s=>s.status==='unavailable')?' 无符号目标侧无法提取内部区域；反向仍可显示。':'')+(penetration.sides.some(s=>s.status==='incomplete')?' 区域提取预算耗尽或字段无效；仅显示已求得部分。':'')+(penetration.sides.every(s=>!s.cells_world_m.length)?' 没有可绘制的严格内部表面；完全重合时可能只有公共内部点。':''):'本页显示离散姿态碰撞结果。零间隙接触不一定产生负 SDF，详见判定原因。';
  if(penetration&&el('regionview').checked)shown.forEach(s=>s.cells_world_m.forEach(c=>commands.push({ps:c.map(project),fill:colors.interference,alpha:.88,line:colors.interference,width:.35})));
+}
+if(touching){
+ const dim=Math.max(...touching.cell_dimensions),hasArea=touching.area_m2>0;
+ el('touchmetric').hidden=false;el('touchtestmetric').hidden=false;
+ el('touchkind').textContent=['点接触 · 0D','线接触 · 1D','面接触 · 2D'][dim]||'尚未求得';
+ el('touchtests').textContent=(collision?.touch_triangle_tests||0)+' 三角形对';
+ el('activemetric').hidden=false;el('activemetric').querySelector('span').textContent='名义网格接触面积';
+ el('overlap').parentElement.querySelector('span').textContent='名义网格关系';
+ el('activemetric').title='输入网格在分离支撑平面上的交集。点和线接触的面积为 0；几何误差和真实物体变形未建模。';
+ el('area').textContent=(touching.area_m2*1e6).toFixed(4)+' mm²'+(touching.complete?'':'（部分）');
+ el('regiontimemetric').hidden=false;el('regiontime').textContent=touching.timing_s.toFixed(3)+' s';
+ el('coverage').textContent='touching：完整网格位于支撑平面的两侧，并在该平面上找到表面交集。判据来自独立几何检查；没有把 near 阈值当作零间隙。';
+ el('sideinfo').textContent=dim===0?'本例是名义网格的点接触，绿色标记是实际接触位置。点的面积为 0，所以不会出现整片着色的接触面。':dim===1?'本例是名义网格的线接触。绿色线段有长度但面积为 0。':'绿色填充是名义网格的接触面，保留原模型边界及孔洞。';
+ el('colorinfo').textContent='绿色 = 零间隙网格接触；红色 = 穿入表面；蓝色 = 另行采用的容差接触。'+(!touching.complete?' 本次区域预算不足，显示部分结果。':'')+(collision&&Object.values(collision.fields||{}).some(f=>!f.signed)?' 此模型的实体内部有效性仍未认证；这里显示的是名义表面接触。':'');
+ if(el('touchview').checked)touching.cells_world_m.forEach((c,i)=>commands.push({ps:c.map(project),fill:colors.active,line:colors.active,alpha:.95,width:touching.cell_dimensions[i]===1?2:.4,loop:touching.cell_dimensions[i]===1,radius:hasArea?1.5:7}));
 }
 const policy=current.analysis.pair_diagnostics.find(d=>d.contact_policy)?.contact_policy;
 el('policymetric').hidden=!policy;el('policylegend').hidden=!policy||!el('policyview').checked;
@@ -77,7 +96,7 @@ current.analysis.patches.forEach((p,i)=>{if(p.measure_kind==='near_band'&&p.samp
 p.regions.forEach(r=>{r.cells_world_m.forEach(c=>commands.push({ps:c.map(project),fill:fillColor(p),alpha:opacity,line:null,width:2}));if(el('boundaries').checked)r.boundary_loops_world_m.forEach(c=>commands.push({ps:[...c,c[0]].map(project),line:accepted(p)&&p.provenance?.distance_interval!=='unsigned'?fillColor(p):colors[p.classification],alpha:.95,width:2,loop:true}));});
 if(el('normals').checked){const points=p.sampling_side==='b'?p.points_b_world_m:p.points_a_world_m,normals=p.sampling_side==='b'?p.normals_b_world:p.normals_a_world;const step=Math.max(1,Math.ceil(points.length/20));for(let j=0;j<points.length;j+=step){const a=points[j],b=add(a,normals[j].map(x=>x*span*.06));commands.push({ps:[project(a),project(b)],line:colors[p.classification],alpha:1,width:1.5,loop:true});}}});
 commands.sort((a,b)=>a.ps.reduce((s,p)=>s+p[2],0)/a.ps.length-b.ps.reduce((s,p)=>s+p[2],0)/b.ps.length);
-for(const c of commands){ctx.globalAlpha=c.alpha;ctx.lineWidth=c.width;if(c.ps.length===1){ctx.beginPath();ctx.arc(c.ps[0][0],c.ps[0][1],4,0,2*Math.PI);ctx.fillStyle=c.fill;ctx.fill();continue;}path(c.ps);if(c.ps.length>2&&!c.loop){ctx.closePath();ctx.fillStyle=c.fill;ctx.fill();}if(c.line||c.ps.length===2){ctx.strokeStyle=c.line||c.fill;ctx.stroke();}}
+for(const c of commands){ctx.globalAlpha=c.alpha;ctx.lineWidth=c.width;if(c.ps.length===1){ctx.beginPath();ctx.arc(c.ps[0][0],c.ps[0][1],c.radius||4,0,2*Math.PI);ctx.fillStyle=c.fill;ctx.fill();continue;}path(c.ps);if(c.ps.length>2&&!c.loop){ctx.closePath();ctx.fillStyle=c.fill;ctx.fill();}if(c.line||c.ps.length===2){ctx.strokeStyle=c.line||c.fill;ctx.stroke();}}
 ctx.globalAlpha=1;ctx.fillStyle='#637684';ctx.font='12px system-ui';ctx.fillText('X / Y / Z · mm',20,h-20);
 const origin=project(center);[['X',[1,0,0],'#c65a64'],['Y',[0,1,0],'#569573'],['Z',[0,0,1],'#5188b9']].forEach(([name,axis,color])=>{const p=project(add(center,axis.map(x=>x*span*.11)));const a=[w-90,h-72],b=[a[0]+p[0]-origin[0],a[1]+p[1]-origin[1]];path([a,b]);ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();ctx.fillStyle=color;ctx.fillText(name,b[0]+4,b[1]);});}
 function choose(index){current=data[index];selected=-1;zoom=1;const vertices=current.meshes.flatMap(m=>m.vertices),lo=[0,1,2].map(i=>vertices.reduce((v,p)=>Math.min(v,p[i]),Infinity)),hi=[0,1,2].map(i=>vertices.reduce((v,p)=>Math.max(v,p[i]),-Infinity));center=lo.map((x,i)=>(x+hi[i])/2);span=Math.max(...sub(hi,lo),1e-9);el('title').textContent=current.name;el('desc').textContent=current.description;const a=current.analysis;
@@ -86,12 +105,16 @@ const hasSDF=a.pair_diagnostics.some(d=>d.contact_backend==='sdf'),zero=hasSDF&&
 const collision=a.pair_diagnostics.find(d=>d.collision_query)?.collision_query;el('activemetric').hidden=!!collision;el('neararea').parentElement.hidden=!!collision;el('unknown').parentElement.hidden=!!collision;el('countlabel').textContent=collision?'SDF 查询点数':'区域记录';if(collision){el('count').textContent=collision.query_points;el('detail').textContent=JSON.stringify(collision,null,2);}
 const policy=a.pair_diagnostics.find(d=>d.contact_policy)?.contact_policy;
 el('policycontrol').hidden=!policy;el('unsignedcontrol').hidden=!policy?.allow_unsigned;
-el('regioncontrol').hidden=!collision;el('bothcontrol').hidden=!collision;
+el('regioncontrol').hidden=!a.pair_diagnostics.some(d=>d.penetration_regions);el('bothcontrol').hidden=el('regioncontrol').hidden;
+el('touchcontrol').hidden=!a.pair_diagnostics.some(d=>d.touch_regions);
 el('regionmetric').hidden=true;el('regiontimemetric').hidden=true;
+el('touchmetric').hidden=true;el('touchtestmetric').hidden=true;
+el('activemetric').querySelector('span').textContent='实际接触面积 / active';
+el('overlap').parentElement.querySelector('span').textContent='全局实体关系';
 if(collision)el('timinglabel').textContent='快速碰撞查询耗时';
 el('unsignedpolicy').checked=!!policy?.allow_unsigned;
 a.patches.forEach((p,i)=>{const b=document.createElement('button');b.className='patch';b.style.borderLeftColor=colors[p.classification];b.textContent=`${p.part_a} ↔ ${p.part_b} · ${p.sampling_side.toUpperCase()} 面 · ${p.classification} · ${p.dimension}D · ${(p.area_m2*1e6).toFixed(2)} mm²`;b.onclick=()=>{selected=selected===i?-1:i;if(selected>=0&&p.measure_kind==='near_band')el('sideb').checked=p.sampling_side==='b';document.querySelectorAll('.patch').forEach((x,j)=>x.classList.toggle('selected',j===selected));el('detail').textContent=selected<0?'':JSON.stringify({quality:p.quality,measure_kind:p.measure_kind,sampling_side:p.sampling_side,gap_interval_mm:p.gap_interval_m.map(x=>x*1000),regions:p.regions.length,provenance:p.provenance},null,2);draw();};el('patches').append(b);});draw();}
 data.forEach((d,i)=>el('cases').add(new Option(d.name,i)));el('cases').onchange=()=>choose(+el('cases').value);['meshes','sourceonly','normals','boundaries','sideb'].forEach(id=>el(id).onchange=draw);el('iso').onclick=()=>{yaw=-.65;pitch=.58;zoom=1;draw();};el('top').onclick=()=>{yaw=0;pitch=Math.PI/2;draw();};el('bottom').onclick=()=>{yaw=0;pitch=-Math.PI/2;draw();};
-['policyview','unsignedpolicy','regionview','bothregions'].forEach(id=>el(id).onchange=draw);
-canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*.008;pitch=Math.max(-1.5,Math.min(1.57,pitch+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY];draw();};canvas.onpointerup=canvas.onpointercancel=()=>drag=null;canvas.onwheel=e=>{e.preventDefault();zoom=Math.max(.25,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));draw();};new ResizeObserver(draw).observe(canvas);const initial=Math.max(0,data.findIndex(d=>d.analysis.pair_diagnostics.some(x=>x.penetration_regions?.sides.some(s=>s.cells_world_m.length))));el('cases').value=initial;choose(initial);
+['policyview','unsignedpolicy','regionview','bothregions','touchview'].forEach(id=>el(id).onchange=draw);
+canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*.008;pitch=Math.max(-1.5,Math.min(1.57,pitch+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY];draw();};canvas.onpointerup=canvas.onpointercancel=()=>drag=null;canvas.onwheel=e=>{e.preventDefault();zoom=Math.max(.25,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));draw();};new ResizeObserver(draw).observe(canvas);const initial=Math.max(0,data.findIndex(d=>d.analysis.pair_diagnostics.some(x=>x.touch_regions?.status==='touching')));el('cases').value=initial;choose(initial);
 </script></html>

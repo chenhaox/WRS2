@@ -1,10 +1,11 @@
 """Collision evidence is independent of near bands and retains unknown outcomes."""
 import importlib.util
 import unittest
+from dataclasses import replace
 from unittest.mock import patch
 import numpy as np
 from wrs.assembly import ContactModel, SDFCollisionChecker
-from wrs.assembly.primitives import box, cylinder, rectangle, pose
+from wrs.assembly.primitives import box, cylinder, sphere, rectangle, pose
 
 
 @unittest.skipUnless(importlib.util.find_spec('open3d'), 'optional open3d is absent')
@@ -18,7 +19,11 @@ class CollisionTests(unittest.TestCase):
             self.assertEqual(clear['status'], 'separated')
             self.assertEqual(clear['query_points'], 0)
             touch = checker.query(a, b, tf_b=pose((0, 0, .1)))
-            self.assertEqual(touch['status'], 'unknown')
+            self.assertEqual(touch['status'], 'touching')
+            self.assertEqual(touch['touch_evidence']['proof']['kind'], 'separating_support_plane')
+            self.assertEqual(touch['quality'], 'nominal_mesh')
+            self.assertEqual(SDFCollisionChecker(use_aabb=False, max_query_points=4000).query(
+                a, b, tf_b=pose((0, 0, .1)))['status'], 'unknown')
             hit = checker.query(a, b, tf_b=pose((0, 0, .09)))
             self.assertEqual(hit['status'], 'penetrating')
             self.assertLess(hit['witness']['distance_m'], -hit['witness']['error_guard_m'])
@@ -60,9 +65,52 @@ class CollisionTests(unittest.TestCase):
 
     def test_invalid_options(self):
         for kwargs in ({'resolution_m': 0}, {'resolution_m': np.nan}, {'max_query_points': 0},
-                       {'batch_size': -1}, {'penetration_tol_m': -1}):
+                       {'batch_size': -1}, {'penetration_tol_m': -1}, {'max_touch_tests': 0}):
             with self.assertRaises(ValueError):
                 SDFCollisionChecker(**kwargs)
+
+    def test_support_contacts_face_line_point_and_gap_not_snapped(self):
+        a, b = ContactModel(box(), 'a'), ContactModel(box(), 'b')
+        checker = SDFCollisionChecker()
+        face = checker.touch_regions(a, b, tf_b=pose((.025, 0, .1)))
+        self.assertEqual(face['status'], 'touching')
+        self.assertTrue(face['complete'])
+        self.assertAlmostEqual(face['area_m2'], .0075, places=12)
+        for offset, dim in (((.1, .1, 0), 1), ((.1, .1, .1), 0)):
+            found = checker.touch_regions(a, b, tf_b=pose(offset))
+            self.assertEqual(max(found['cell_dimensions']), dim)
+            self.assertEqual(found['area_m2'], 0)
+        for offset in (.1000005, .0999995):
+            found = checker.query(a, b, tf_b=pose((0, 0, offset)))
+            self.assertNotEqual(found['status'], 'touching')
+        uncertain = ContactModel(replace(a.geometry, geometry_error_m=1e-6), 'c')
+        self.assertEqual(checker.touch_regions(uncertain, b, tf_b=pose((0, 0, .1)))['status'], 'unknown')
+
+    def test_support_contacts_curved_pole_holes_pose_symmetry_and_budget(self):
+        a = ContactModel(box(), 'a')
+        ball = ContactModel(sphere(.02), 'ball', pose((0, 0, .07)))
+        checker = SDFCollisionChecker()
+        point = checker.touch_regions(a, ball)
+        self.assertEqual(point['status'], 'touching')
+        self.assertEqual(max(point['cell_dimensions']), 0)
+        tube = ContactModel(cylinder(.02, .02, 32, inner_radius=.01), 'tube', pose((0, 0, .06)))
+        ring = checker.touch_regions(a, tube)
+        expected = 32*np.sin(2*np.pi/32)*(.02**2-.01**2)/2
+        self.assertAlmostEqual(ring['area_m2'], expected, places=12)
+        self.assertAlmostEqual(checker.touch_regions(tube, a)['area_m2'], expected, places=12)
+        tf = pose((.3, -.2, .7)).copy()
+        angle = .37
+        tf[:3, :3] = [[1, 0, 0], [0, np.cos(angle), -np.sin(angle)], [0, np.sin(angle), np.cos(angle)]]
+        rotated = checker.touch_regions(a, tube, tf_a=tf @ a.tf, tf_b=tf @ tube.tf)
+        self.assertAlmostEqual(rotated['area_m2'], expected, places=12)
+        limited = checker.touch_regions(a, tube, max_triangle_tests=1)
+        self.assertFalse(limited['complete'])
+        self.assertEqual(limited['triangle_tests'], 1)
+        # A bounding plane alone does not imply touch: this box is over a hole.
+        small = ContactModel(box((.004, .004, .01)), 'small', pose((0, 0, .075)))
+        no_contact = checker.touch_regions(tube, small)
+        self.assertEqual(no_contact['cells_world_m'], [])
+        self.assertNotEqual(checker.query(tube, small)['status'], 'touching')
 
     def test_penetration_regions_match_box_surface_areas_and_pose_overrides(self):
         a = ContactModel(box((.02, .02, .02)), 'a')

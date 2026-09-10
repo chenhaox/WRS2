@@ -72,6 +72,11 @@ _Array kernels for SDF integration; loops run over clipping planes, not cells._
 - `clip_cells(triangles, scores)` — Clip N triangles by three vertex-linear inequalities (N,3,3).
 - `measure_cells(polygons, counts)` — Compute polygon areas and centroids in one padded triangle-fan batch.
 
+## `wrs.assembly.contact._support_contact`
+_Nominal mesh contact on a separating support plane, independent of SDF sign._
+
+- `support_contact(pa, pb, ta, tb, *, max_tests, first_only=False)` — Find zero-distance features where entire meshes lie on opposite sides.
+
 ## `wrs.assembly.contact.analysis`
 _State-explicit contact analysis combining plane regions and mesh witnesses._
 
@@ -119,10 +124,10 @@ _Batched SDF near-band integration with explicit sampling and sign uncertainty._
   - methods: `cache_key`, `prepare`, `analyze_pair`
 
 ## `wrs.assembly.contact.sdf_collision`
-_SDF collision evidence without near bands, normal filtering or polygon assembly._
+_Fast SDF collision queries with explicit, separate nominal contact geometry._
 
 - **class `SDFCollisionChecker`** — Query mesh collisions using bilateral signed-distance samples and bounds.
-  - methods: `prepare`, `query`, `penetration_regions`
+  - methods: `prepare`, `query`, `touch_regions`, `penetration_regions`
 
 ## `wrs.assembly.geometry.mesh_bvh`
 _CPU triangle BVH and exact primitive witnesses in double precision._

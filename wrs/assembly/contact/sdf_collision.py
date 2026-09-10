@@ -1,4 +1,4 @@
-"""SDF collision evidence without near bands, normal filtering or polygon assembly."""
+"""Fast SDF collision queries with explicit, separate nominal contact geometry."""
 from collections import deque
 from time import perf_counter
 import numpy as np
@@ -25,28 +25,33 @@ class SDFCollisionChecker:
         Explicit policy for invalid target solids. Unsigned fields cannot
         certify absence of containment or supply a penetration sign.
     use_aabb : bool
-        Permit an independent box separation test before preparing fields.
+        Permit independent box separation and separating-support-plane contact
+        checks. Touching from this path is explicitly nominal mesh evidence.
+    max_touch_tests : int
+        Independent triangle-feature budget for the nominal touch fast path.
 
     Notes
     -----
     Only mesh-derived fields are supported here. Results name their evidence:
-    aabb separation, negative surface witness, positive SDF cell bounds, or
-    unknown. SDF evidence is estimated: Open3D's float32 guard is not a formal
+    aabb separation, nominal support-plane touching, negative surface witness,
+    positive SDF cell bounds, or unknown. SDF evidence is estimated: Open3D's float32 guard is not a formal
     error certificate. This is a discrete pose query, not continuous collision
     detection. Native fields require a global zero-set/domain contract first.
     """
     def __init__(self, *, resolution_m=.0002, max_query_points=200000,
-                 batch_size=1024, penetration_tol_m=1e-8, open_surface='error', use_aabb=True):
+                 batch_size=1024, penetration_tol_m=1e-8, open_surface='error', use_aabb=True,
+                 max_touch_tests=50000):
         if not np.isfinite(resolution_m) or resolution_m <= 0:
             raise ValueError('resolution_m must be finite and positive')
         if not np.isfinite(penetration_tol_m) or penetration_tol_m < 0:
             raise ValueError('penetration_tol_m must be finite and nonnegative')
-        for value in (max_query_points, batch_size):
+        for value in (max_query_points, batch_size, max_touch_tests):
             if not isinstance(value, int) or value < 1:
                 raise ValueError('Budgets and batch sizes must be positive integers')
         self.resolution_m, self.max_query_points = resolution_m, max_query_points
         self.batch_size, self.penetration_tol_m = batch_size, penetration_tol_m
         self.use_aabb = bool(use_aabb)
+        self.max_touch_tests = max_touch_tests
         self._backend = SDFContactBackend(sdf_config=SDFConfig(open_surface=open_surface,
                                                               validate_mesh_overlap=False))
         self._provider_key = self._backend.cache_key
@@ -76,11 +81,12 @@ class SDFCollisionChecker:
         lower = float(np.linalg.norm(np.maximum(np.maximum(va.min(0)-vb.max(0), vb.min(0)-va.max(0)), 0)))
         report = {'schema_version': 'wrs.assembly.sdf_collision/1', 'part_a': a.name, 'part_b': b.name,
                   'status': 'unknown', 'quality': 'estimated', 'reason': '', 'witness': None,
+                  'touch_evidence': None, 'touch_triangle_tests': 0,
                   'sides': [], 'query_points': 0, 'interior_query_points': 0, 'aabb_distance_lower_m': lower,
                   'resolution_m': self.resolution_m, 'max_query_points': self.max_query_points,
                   'state_digest': digest((a.geometry_key, b.geometry_key, ta, tb, self.resolution_m,
                                           self.max_query_points, self.batch_size, self.penetration_tol_m,
-                                          self.use_aabb, self._provider_key, 'sdf_collision/1'))}
+                                          self.use_aabb, self.max_touch_tests, self._provider_key, 'sdf_collision/2'))}
         if self.use_aabb and lower > guard:
             report.update(status='separated', quality='aabb_bound', reason='disjoint_aabb')
             report['timing_s'] = {'prepare': 0.0, 'query': perf_counter()-start, 'total': perf_counter()-start}
@@ -90,6 +96,16 @@ class SDFCollisionChecker:
         pb, fb = self.prepare(b)
         prepared_at = perf_counter()
         report['fields'] = {'a': fa.metadata, 'b': fb.metadata}
+        if self.use_aabb:
+            from ._support_contact import support_contact
+            contact = support_contact(pa, pb, ta, tb, max_tests=self.max_touch_tests, first_only=True)
+            report['touch_triangle_tests'] = contact['triangle_tests']
+            if contact['status'] == 'touching':
+                report.update(status='touching', quality='nominal_mesh',
+                              reason='separating_plane_and_surface_intersection', touch_evidence=contact)
+                report['timing_s'] = {'prepare': prepared_at-prepare_started,
+                                     'query': perf_counter()-prepared_at, 'total': perf_counter()-start}
+                return report
         remaining = self.max_query_points
         # Surface-only samples cannot detect coincident solids. A small set of
         # candidate interior points is accepted only when BOTH fields confirm
@@ -184,6 +200,26 @@ class SDFCollisionChecker:
                 queue.extend(zip(split_triangles(cells[refine]).reshape(-1, 3, 3), np.repeat(ids[refine], 2)))
         if result['reason'] == 'covered' and result['unresolved_area_m2']:
             result['reason'] = 'resolution_reached_near_zero'
+        return result
+
+    def touch_regions(self, a, b, *, tf_a=None, tf_b=None, max_triangle_tests=50000):
+        """Extract nominal point/line/area contact on a separating support plane.
+
+        This independent mesh-geometry path is not a thresholded SDF band.
+        It retains holes, original triangles, explicit proof and its own budget.
+        General curved mating contact without a found support plane remains
+        unsupported/unknown. Empty or incomplete output is not a free-space proof.
+        """
+        from ._support_contact import support_contact
+        if not isinstance(max_triangle_tests, int) or max_triangle_tests < 1:
+            raise ValueError('max_triangle_tests must be a positive integer')
+        ta, tb = checked_tf(a.tf if tf_a is None else tf_a), checked_tf(b.tf if tf_b is None else tf_b)
+        pa, _ = self.prepare(a)
+        pb, _ = self.prepare(b)
+        result = support_contact(pa, pb, ta, tb, max_tests=max_triangle_tests)
+        result.update(part_a=a.name, part_b=b.name,
+                      state_digest=digest((a.name, a.geometry_key, b.name, b.geometry_key, ta, tb,
+                                           max_triangle_tests, self._provider_key, 'support_contact/1')))
         return result
 
     def penetration_regions(self, a, b, *, tf_a=None, tf_b=None,

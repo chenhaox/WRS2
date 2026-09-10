@@ -93,10 +93,12 @@ def main():
                                                max_query_points=500000)
                    if result['status'] == 'penetrating' else None)
         row['penetration_regions'] = regions
+        touch = checker.touch_regions(*models) if result['status'] == 'touching' else None
+        row['touch_regions'] = touch
         rows.append(row)
         diag = {'part_a': models[0].name, 'part_b': models[1].name, 'contact_backend': 'sdf_collision',
                 'overlap': {'status': result['status']}, 'collision_query': result, 'expected': expected,
-                'penetration_regions': regions}
+                'penetration_regions': regions, 'touch_regions': touch}
         analysis = ContactAnalysis((), (diag,), result['state_digest'],
                                    statistics={'timing_s': {'backend_total': row['warm_median_s']}})
         assembly = Assembly(tuple(m.as_part() for m in models))
@@ -106,6 +108,9 @@ def main():
         if regions:
             print(f'  {key} overlay: {regions["timing_s"]["total"]:.3f}s; '
                   f'areas A/B={[round(s["area_m2"]*1e6, 3) for s in regions["sides"]]} mm2', flush=True)
+        if touch:
+            print(f'  {key} touch: {touch["timing_s"]:.3f}s; '
+                  f'area={touch["area_m2"]*1e6:.6f} mm2; dimensions={sorted(set(touch["cell_dimensions"]))}', flush=True)
         print(f"{key}: expected={expected}, got={result['status']}, {row['warm_median_s']*1000:.2f}ms, {result['reason']}", flush=True)
 
     for key, path in files.items():
@@ -138,7 +143,7 @@ def main():
         '两根薄杆正交穿过；不使用近接法向过滤。', SDFCollisionChecker(), None)
     run('sdf_only_separation', (large, ContactModel(large.geometry, 'B', pose((0, 0, .15)))),
         'separated', '关闭 AABB 快捷路径，用正 SDF 单元下界排除全部源表面。', SDFCollisionChecker(use_aabb=False), None)
-    save_report({'scope': 'discrete collision evidence; optional penetration surfaces separately timed; warm times exclude STL loading, preparation and region extraction',
+    save_report({'scope': 'SDF collision with explicit separating-plane nominal touch checks; touch/penetration regions separately timed; warm times exclude STL loading, preparation and region extraction',
                  'python': sys.executable, 'results': rows}, args.out_dir/'results.json')
     write_contact_html(previews, args.out_dir/'contacts.html')
 
