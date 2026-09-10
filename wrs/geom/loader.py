@@ -27,20 +27,29 @@ def load_geometry(path):
 # ==============================
 # STL Loader and Saver
 # ==============================
-def _load_stl(path):
+def read_stl_arrays(path, dtype=np.float64):
+    """Read raw STL vertices/faces without welding or creating scene geometry.
+
+    Vertices have the file's undeclared length unit; callers supply conversion.
+    Binary STL precision is inherently float32; ASCII retains the chosen dtype.
+    """
+    return _load_stl(path, dtype=dtype)
+
+
+def _load_stl(path, dtype=np.float32):
     with open(path, "rb") as f:
         f.read(80)  # ignore header
         tri_count_bytes = f.read(4)
         if len(tri_count_bytes) < 4:
-            raise ValueError("Invalid STL file")
+            return _load_stl_ascii(path, dtype=dtype)
         tri_count = struct.unpack("<I", tri_count_bytes)[0]
         # Expected binary size = 84 + M * 50
         file_size = os.path.getsize(path)
         expected = 84 + tri_count * 50
         if file_size == expected:
-            return _load_stl_binary(path, tri_count)
+            return _load_stl_binary(path, tri_count, dtype=dtype)
         else:
-            return _load_stl_ascii(path)
+            return _load_stl_ascii(path, dtype=dtype)
 
 
 def _save_stl(vs, fs, filename):
@@ -71,8 +80,8 @@ def _save_stl(vs, fs, filename):
             f.write(struct.pack("<H", 0))
 
 
-def _load_stl_binary(path, tri_count):
-    vs = np.zeros((tri_count * 3, 3), dtype=np.float32)
+def _load_stl_binary(path, tri_count, dtype=np.float32):
+    vs = np.zeros((tri_count * 3, 3), dtype=dtype)
     fs = np.zeros((tri_count, 3), dtype=np.int32)
     with open(path, "rb") as f:
         f.read(80)  # header
@@ -89,11 +98,11 @@ def _load_stl_binary(path, tri_count):
             vs[base + 2] = v2
             fs[i] = (base + 0, base + 1, base + 2)
             f.read(2)  # skip attribute bytes
-    return (np.array(vs, dtype=np.float32),
+    return (np.array(vs, dtype=dtype),
             np.array(fs, dtype=np.int32))
 
 
-def _load_stl_ascii(path):
+def _load_stl_ascii(path, dtype=np.float32):
     vs = []
     fs = []
     current_face = []
@@ -104,13 +113,17 @@ def _load_stl_ascii(path):
                 _, x, y, z = line.split()
                 current_face.append([float(x), float(y), float(z)])
             elif line.startswith("endfacet"):
+                if len(current_face) != 3:
+                    raise ValueError('STL facets must contain exactly three vertices')
                 i0 = len(vs) + 0
                 i1 = len(vs) + 1
                 i2 = len(vs) + 2
                 vs.extend(current_face)
                 fs.append([i0, i1, i2])
                 current_face = []
-    return (np.array(vs, dtype=np.float32),
+    if current_face:
+        raise ValueError('Unterminated STL facet')
+    return (np.array(vs, dtype=dtype).reshape(-1, 3),
             np.array(fs, dtype=np.int32))
 
 

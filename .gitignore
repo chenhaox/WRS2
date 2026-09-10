@@ -94,3 +94,6 @@ site/
 
 # Claude Code local config
 .claude/
+
+# Reproducible assembly examples write manifests, reports and previews here.
+examples/assembly/output/

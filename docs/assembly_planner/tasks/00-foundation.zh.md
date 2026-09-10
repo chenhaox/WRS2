@@ -1,6 +1,6 @@
 # 00：输入、数据契约和无界面运行基础
 
-状态：待实施。前置：无。里程碑 M1 的起点。
+状态：**M1 中已完成，2026-09-10**。前置：无。以下步骤和提示词保留为原设计记录；实际接口与运行方法见 [M1 交接](../m1.zh.md)。
 
 ## 目标和修改范围
 
@@ -39,4 +39,8 @@
 
 ## 交接记录
 
-实施后填写：基线/完成 commit、测试命令与输出、schema/fixture API、兼容性验证范围、未解决事项。当前未实施。
+已实现不可变模型、`wrs.assembly/1` 输入、`wrs.assembly.contact/1` 输出、显式单位/姿态、原始 STL 读取、旧 loader 的 `Rz @ Ry @ Rx` 映射、根包延迟导入。fixture 统一在 `wrs/assembly/primitives.py`，供测试与示例共享。
+
+`test_io.py` 5 项、`test_state.py` 2 项通过。同一指定解释器子进程阻断物理/显示/CAD 模块后仍能分析。`from wrs import wvw, wsso, wssop, Grasp, MotionData` 导入通过；可选显示场景可构建，未启动 WRS hub/仿真。
+
+旧清单实跑：domino_5 3 件、burrpuzzle 6 件并成功输出转换 manifest；bridge 6 件但 alframe 缺失，报告而未转换。mm 为显式实验假设，质量/摩擦缺失保持未知。命令、环境、基线和生成路径见 M1 交接；后续模型（ContactGraph、hold 状态等）保留协议，没有伪造实现。

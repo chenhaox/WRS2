@@ -1,6 +1,6 @@
 # 03：表面距离、穿透证据和曲面近接触
 
-状态：待实施。前置：01。可与 02 并行；整合时复用 02 已实现的平面后端。
+状态：**M1 中已完成，2026-09-10，已与 02 整合**。前置：01。以下为原设计记录；精度、覆盖与限制见 [M1 交接](../m1.zh.md)。
 
 ## 目标和修改范围
 
@@ -41,4 +41,10 @@
 
 ## 交接记录
 
-待填：ProximityBackend 实际 API、overlap 假设、精度/覆盖语义、性能、未支持场景、基线。当前未实施。
+实现双树 BVH 与三角 AABB 距离界、point/triangle 最近点、vertex-face/edge-edge/edge-face 相交、独立 crossing/containment/winding overlap、双向自适应近接触带、保留各侧区域与法线场。局部索引有界复用，预算耗尽返回 partial/unknown/unresolved；曲面点/线恢复明确 unsupported。
+
+`test_proximity.py` 5 项、`test_curved_contact.py` 3 项通过。包含 brute-force 对照、面内部/边中部/穿越、完全包含/相同实体、空腔轴孔、开放/嵌套壳、预算、重三角化、阈值变化。冷/热实测 960×960 面输入精确检查 648 对，约 0.36/0.37 s，跟踪分配峰值 0.591 MiB；不是整体进程内存或实时保证。
+
+圆周 12/24/48 段距离误差收敛；固定网格的 4/2 mm 采样带估计一致，1 mm 在固定预算下不完整，显式记录而不宣称面积收敛。`benchmark.py` 和 `convergence.py` 可复现，详细结果在 M1 交接。
+
+inside/outside 前提仍为经用户核验的非自交封闭流形；没有认证任意自交 mesh。协议同时要求 `prepare/index/geometry_config`，只实现三个距离函数不足以替换整个 M1 mesh dispatcher。后续 06 只能把 complete/bounds 与 unknown 按各自语义消费，不能把 timeout 缓存成永久无解。

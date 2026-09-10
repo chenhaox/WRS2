@@ -24,6 +24,7 @@ _Geometry container (vertices/faces/normals) and mesh-level helpers used_
 _Mesh file loading: ``load_geometry(path)`` reads STL (ascii/binary) and_
 
 - `load_geometry(path)`
+- `read_stl_arrays(path, dtype=np.float64)` — Read raw STL vertices/faces without welding or creating scene geometry.
 
 ## `wrs.geom.ops2d`
 

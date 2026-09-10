@@ -1,56 +1,49 @@
-import numpy as np
+"""WRS public aliases, loaded on demand so geometry can run headlessly."""
+from importlib import import_module
 
-import wrs.viewer.key as key
+_MODULES = {
+    'np': 'numpy', 'key': 'wrs.viewer.key',
+    'wum': 'wrs.utils.math', 'wuh': 'wrs.utils.helper', 'wuc': 'wrs.utils.constant',
+    'wgg': 'wrs.geom.geometry', 'wgl': 'wrs.geom.loader',
+    'wss': 'wrs.scene.scene', 'wsso': 'wrs.scene.scene_object',
+    'wssop': 'wrs.scene.scene_object_primitive', 'wsrm': 'wrs.scene.render_model',
+    'wsgop': 'wrs.scene.geometry_ops', 'wvw': 'wrs.viewer.world',
+    'wcm': 'wrs.collider.mj_collider', 'wccs': 'wrs.collider.cpu_simd',
+    'wgab': 'wrs.grasp.antipodal', 'wgpp': 'wrs.grasp.polypodal',
+    'wgmc': 'wrs.grasp.monocontact', 'wgpl': 'wrs.grasp.placement',
+    'wgr': 'wrs.grasp.reasoner', 'wgs': 'wrs.grasp.serialize',
+    'wmppc': 'wrs.motion.core.planning_context', 'wmpr': 'wrs.motion.probabilistic.rrt',
+    'wmpp': 'wrs.motion.probabilistic.prm', 'wmic': 'wrs.motion.interpolation.cartesian',
+    'wmij': 'wrs.motion.interpolation.joint', 'wmttg': 'wrs.motion.trajectory.totg',
+    'wmpad': 'wrs.motion.primitives.approach_depart',
+    'wmpp_pickplace': 'wrs.manipulation.pick_place', 'wma': 'wrs.manipulation.arm',
+    'khi_rs007l': 'wrs.robots.manipulators.kawasaki.rs007l.rs007l',
+    'xarm_lite6': 'wrs.robots.manipulators.xarm.lite6.lite6',
+    'or_2fg7': 'wrs.robots.end_effectors.onrobot.or_2fg7.or_2fg7',
+    'xyt': 'wrs.robots.vehicle.xytheta',
+}
+_SYMBOLS = {
+    'Grasp': ('wrs.grasp.grasp', 'Grasp'),
+    'MotionData': ('wrs.motion.core.motion_data', 'MotionData'),
+    'gen_pick_and_place': ('wrs.manipulation.pick_place', 'gen_pick_and_place'),
+    'Arm': ('wrs.manipulation.arm', 'Arm'),
+    'SingleArmManipulation': ('wrs.manipulation.arm', 'SingleArmManipulation'),
+}
+# The previous __all__ included an undefined wmttp; actual aliases are preserved.
+__all__ = list(_MODULES) + list(_SYMBOLS)
 
-import wrs.utils.math as wum
-import wrs.utils.helper as wuh
-import wrs.utils.constant as wuc
 
-import wrs.geom.geometry as wgg
-import wrs.geom.loader as wgl
+def __getattr__(name):
+    if name in _MODULES:
+        value = import_module(_MODULES[name])
+    elif name in _SYMBOLS:
+        module, attr = _SYMBOLS[name]
+        value = getattr(import_module(module), attr)
+    else:
+        raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+    globals()[name] = value
+    return value
 
-import wrs.scene.scene as wss
-import wrs.scene.scene_object as wsso
-import wrs.scene.scene_object_primitive as wssop
-import wrs.scene.render_model as wsrm
-import wrs.scene.geometry_ops as wsgop
 
-import wrs.viewer.world as wvw
-
-import wrs.collider.mj_collider as wcm
-import wrs.collider.cpu_simd as wccs
-
-import wrs.grasp.antipodal as wgab
-import wrs.grasp.polypodal as wgpp
-import wrs.grasp.monocontact as wgmc
-import wrs.grasp.placement as wgpl
-import wrs.grasp.reasoner as wgr
-import wrs.grasp.serialize as wgs
-from wrs.grasp.grasp import Grasp
-
-import wrs.motion.core.planning_context as wmppc
-import wrs.motion.probabilistic.rrt as wmpr
-import wrs.motion.probabilistic.prm as wmpp
-import wrs.motion.interpolation.cartesian as wmic
-import wrs.motion.interpolation.joint as wmij
-import wrs.motion.trajectory.totg as wmttg
-import wrs.motion.primitives.approach_depart as wmpad
-from wrs.motion.core.motion_data import MotionData
-
-import wrs.manipulation.pick_place as wmpp_pickplace
-import wrs.manipulation.arm as wma
-from wrs.manipulation.pick_place import gen_pick_and_place
-from wrs.manipulation.arm import Arm, SingleArmManipulation
-
-import wrs.robots.manipulators.kawasaki.rs007l.rs007l as khi_rs007l
-import wrs.robots.manipulators.xarm.lite6.lite6 as xarm_lite6
-import wrs.robots.end_effectors.onrobot.or_2fg7.or_2fg7 as or_2fg7
-import wrs.robots.vehicle.xytheta as xyt
-
-__all__ = ['np', 'key', 'wum', 'wuh', 'wuc',
-           'wss', 'wsso', 'wssop', 'wgg', 'wsrm', 'wgl', 'wsgop', 'wvw',
-           'wcm', 'wccs', 'wgab', 'wgpp', 'wgmc', 'wgpl', 'wgr', 'wgs', 'Grasp',
-           'wmppc', 'wmpr', 'wmpp', 'wmic', 'wmij', 'wmttp', 'wmttg', 'wmpad',
-           'MotionData',
-           'gen_pick_and_place', 'wma', 'Arm', 'SingleArmManipulation',
-           'khi_rs007l', 'xarm_lite6', 'or_2fg7', 'xyt']
+def __dir__():
+    return sorted(set(globals()) | set(__all__))

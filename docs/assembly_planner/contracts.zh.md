@@ -1,6 +1,8 @@
-# 共同接口约定 v0.1（拟议，任务 00 落地）
+# 共同接口约定 v1（M1 已落地，后续规划接口仍为设计）
 
-本文件约束不同对话的模块边界。当前是 implementation 设计，不代表下列符号已经存在。任务 00 可根据实际类型实现做小范围修订，随后在任务交接中固定版本。
+本文件约束不同对话的模块边界。输入 schema 为 `wrs.assembly/1`，分析输出为 `wrs.assembly.contact/1`。M1 的实际类型以 `wrs/assembly/model.py` 和 [M1 交接](m1.zh.md) 为准。下表和包布局仍包含 04—10 的未来接口，不代表全部符号都已经存在。
+
+M1 实际边界：`SurfacePatch.kind` 为 `plane/general`，`face_ids` 索引 PreparedMesh，原面映射在 `PreparedMesh.source_face_ids`；`Part` 当前用 `part_id` 显示名字、`fixed` 标记固定支撑、`friction` 表示摩擦；`AssemblyState` 当前只有显式 `poses` 与 `world_revision`。夹持、资源、ContactGraph、MotionConfig、StabilityConfig、规划/执行结果留给后续任务。有限开放支撑用显式 `orientation='trusted'` 的 mesh 输入。
 
 ## 包边界
 
@@ -9,9 +11,10 @@ wrs/assembly/
   __init__.py             # 轻量导出，不启动窗口/物理/服务
   model.py                # 共享数据类型、结果与配置
   io.py                   # assembly manifest、单位和版本
+  primitives.py           # 已实现：确定性解析案例的 mesh 生成器
   adapters/
     legacy.py             # 旧 JSON + STL 输入转换
-    wrs_scene.py          # SceneObject 与分析几何的桥梁
+    wrs_scene.py          # 待任务 08：SceneObject 输入与分析几何的桥梁
   geometry/
     preprocess.py         # 清理、拓扑、法线与面 ID 映射
     surfaces.py           # SurfacePatch 分割与参数
@@ -29,7 +32,7 @@ wrs/assembly/
   part_motion.py          # 零件 SE(3) 路径及有限运动检查
   sequence.py             # 任务状态、动作和序列搜索
   execution.py            # WRS 机器人执行验证
-  visualization.py       # 显示数据，不作可行性判断
+  visualization.py       # 已实现：HTML 与可选 WRS 输出场景，不作可行性判断
 ```
 
 几何/contact/constraints/stability/sequence 核心不依赖 `base`、Panda3D、viewer 或 MuJoCo。通用几何原语在此验证稳定后再考虑上移到 `wrs.geom`，不要在第一步重写 WRS 其他调用者依赖的函数。
@@ -99,6 +102,8 @@ provenance                    # 后端版本、几何/状态摘要、source face
 
 以下签名是模块协作目标，具体 dataclass 字段由 00 落地后成为单一真源。
 
+下面 io / preprocess / surfaces / proximity / analyze_pair / analyze_contacts 已存在；`build_contact_graph` 及后续规划层尚不存在。M1 dispatcher 使用的 MeshProximity 还需要 `geometry_config`、`prepare(mesh)`、`index(mesh)`；CAD 后端不能只实现三个距离函数就假装兼容 mesh dispatcher。
+
 ```python
 # io / preprocess / surfaces
 load_assembly(manifest_path, *, length_unit=None) -> Assembly
@@ -154,7 +159,7 @@ validate_execution(plan, workcell, *, config) -> ExecutionResult
 
 所有任务统一使用 `D:\code\venv312\.venv\Scripts\python.exe`，包括依赖安装（`-m pip`）、测试和示例。不要切换系统 Python 或新建另一套虚拟环境。每次交接记录 `sys.executable`、相关包版本和实际加载的 WRS checkout。
 
-下面是任务 00 建立测试目录后，在当前任务 checkout 中使用的 PowerShell 命令，不是本轮已运行结果：
+下面命令已在 M1 中实际运行；范围和结果见 M1 交接：
 
 ```powershell
 $assemblyPython = 'D:\code\venv312\.venv\Scripts\python.exe'

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WRS · 接触几何实验</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f5f7;color:#172b3d;font:14px/1.55 system-ui,"Microsoft YaHei",sans-serif}
+header{height:74px;display:flex;align-items:center;justify-content:space-between;padding:0 30px;background:white;border-bottom:1px solid #dce2e7}
+.brand{font-size:20px;font-weight:650;letter-spacing:.4px}.tag{font-size:12px;color:#596d7b;margin-left:18px;font-weight:400}
+main{display:grid;grid-template-columns:340px 1fr;min-height:calc(100vh - 74px)}aside{background:white;padding:26px;border-right:1px solid #dce2e7;overflow:auto;max-height:calc(100vh - 74px)}
+select{width:100%;padding:11px;border:1px solid #bac8d1;border-radius:6px;background:white;color:#172b3d;font:inherit}h1{font-size:23px;line-height:1.3;margin:24px 0 12px}p{color:#637684}small{color:#6b7e8d}
+.metric{padding:16px 0;border-bottom:1px solid #e5e9ed;display:flex;justify-content:space-between;gap:10px}.metric b{font-variant-numeric:tabular-nums}.note{background:#f0f4f8;border-radius:6px;padding:13px;font-size:12px;margin-top:20px}
+section{position:relative;display:flex;flex-direction:column;min-width:0}.toolbar{display:flex;flex-wrap:wrap;gap:16px;align-items:center;padding:17px 24px;background:#fafbfc}button{background:white;border:1px solid #c8d3dc;border-radius:5px;padding:6px 12px;color:#324d62;cursor:pointer}label{white-space:nowrap;font-size:13px;cursor:pointer}
+canvas{display:block;width:100%;height:calc(100vh - 222px);min-height:420px;touch-action:none;cursor:grab}.legend{display:flex;justify-content:center;gap:26px;font-size:13px;margin:12px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}.hint{text-align:center;font-size:12px;color:#687f91;padding-bottom:16px}
+.patch{display:block;width:100%;text-align:left;margin:8px 0;font-size:12px;border-left:3px solid #b3c3d3}.patch.selected{background:#edf2f8}details{margin-top:20px}pre{font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:210px;overflow:auto}
+@media(max-width:800px){main{grid-template-columns:1fr}aside{max-height:none;border-right:0;padding:18px}header{padding:0 18px}.tag{display:none}h1{margin-top:14px}.metric{display:inline-flex;width:49%;padding:10px 8px}canvas{height:480px}.note{margin-top:10px}}
+</style>
+<header><div class="brand">WRS / 接触几何实验<span class="tag">ASSEMBLY PLANNER · M1</span></div><small>真实表面 · 区域与间隙</small></header>
+<main><aside><small>选择解析案例</small><select id="cases" aria-label="选择案例"></select><h1 id="title"></h1><p id="desc"></p>
+<div class="metric"><span>Active 面积</span><b id="area"></b></div><div class="metric"><span>全局实体关系</span><b id="overlap"></b></div>
+<div class="metric"><span>区域记录</span><b id="count"></b></div><div class="metric"><span>未解析面积上界 / 汇总</span><b id="unknown"></b></div>
+<div class="note">绿色是模型中的 active 区域；橙色是正间隙 near 区域。曲面近接触带使用估计面积，不能直接用于承载力计算。实体关系 unknown 时，局部区域仍可查看。</div>
+<details><summary>查看区域证据</summary><div id="patches"></div><pre id="detail"></pre></details>
+</aside><section><div class="toolbar"><button id="iso">立体视图</button><button id="top">俯视</button><label><input id="meshes" type="checkbox" checked>零件</label><label><input id="normals" type="checkbox">法线</label><label><input id="boundaries" type="checkbox" checked>边界</label><label><input id="sideb" type="checkbox">曲面 B 侧采样</label></div>
+<canvas id="view" aria-label="可拖动旋转的三维接触区域"></canvas><div class="legend"><span><i class="dot" style="background:#078b70"></i>active</span><span><i class="dot" style="background:#e89420"></i>near</span><span><i class="dot" style="background:#d74850"></i>interference</span><span><i class="dot" style="background:#8466b4"></i>unknown</span></div><div class="hint">拖动旋转 · 滚轮缩放 · 点击左侧区域查看来源与间隙 · 显示单位 mm</div></section></main>
+<script id="data" type="application/json">__ASSEMBLY_DATA__</script>
+<script>
+'use strict';
+const data=JSON.parse(document.getElementById('data').textContent), el=id=>document.getElementById(id);
+const canvas=el('view'),ctx=canvas.getContext('2d'),colors={active:'#078b70',near:'#e89420',interference:'#d74850',unknown:'#8466b4'};
+let current,center,span,yaw=-.65,pitch=.58,zoom=1,selected=-1,drag=null;
+const sub=(a,b)=>a.map((x,i)=>x-b[i]),add=(a,b)=>a.map((x,i)=>x+b[i]);
+function project(p){const q=sub(p,center),u=Math.cos(yaw)*q[0]-Math.sin(yaw)*q[1],v=Math.sin(yaw)*q[0]+Math.cos(yaw)*q[1],s=Math.min(canvas.clientWidth,canvas.clientHeight)*.7/span*zoom;return [canvas.clientWidth/2+s*u,canvas.clientHeight/2+s*(Math.sin(pitch)*v-Math.cos(pitch)*q[2]),Math.cos(pitch)*v+Math.sin(pitch)*q[2]];}
+function path(points){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));}
+function draw(){if(!current)return;const dpr=window.devicePixelRatio||1,w=canvas.clientWidth,h=canvas.clientHeight;canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+const commands=[];
+if(el('meshes').checked)current.meshes.forEach((m,i)=>m.faces.forEach(f=>commands.push({ps:f.map(j=>project(m.vertices[j])),fill:i%2?'#819ebc':'#bac7d2',alpha:.1,line:'#8a9dab',width:.3})));
+current.analysis.patches.forEach((p,i)=>{if(p.measure_kind==='near_band'&&p.sampling_side!==(el('sideb').checked?'b':'a'))return;const opacity=selected<0||selected===i?.74:.13;
+p.regions.forEach(r=>{r.cells_world_m.forEach(c=>commands.push({ps:c.map(project),fill:colors[p.classification],alpha:opacity,line:null,width:2}));if(el('boundaries').checked)r.boundary_loops_world_m.forEach(c=>commands.push({ps:[...c,c[0]].map(project),line:colors[p.classification],alpha:.95,width:2,loop:true}));});
+if(el('normals').checked){const step=Math.max(1,Math.ceil(p.points_a_world_m.length/20));for(let j=0;j<p.points_a_world_m.length;j+=step){const a=p.points_a_world_m[j],b=add(a,p.normals_a_world[j].map(x=>x*span*.06));commands.push({ps:[project(a),project(b)],line:colors[p.classification],alpha:1,width:1.5,loop:true});}}});
+commands.sort((a,b)=>a.ps.reduce((s,p)=>s+p[2],0)/a.ps.length-b.ps.reduce((s,p)=>s+p[2],0)/b.ps.length);
+for(const c of commands){ctx.globalAlpha=c.alpha;ctx.lineWidth=c.width;if(c.ps.length===1){ctx.beginPath();ctx.arc(c.ps[0][0],c.ps[0][1],4,0,2*Math.PI);ctx.fillStyle=c.fill;ctx.fill();continue;}path(c.ps);if(c.ps.length>2&&!c.loop){ctx.closePath();ctx.fillStyle=c.fill;ctx.fill();}if(c.line||c.ps.length===2){ctx.strokeStyle=c.line||c.fill;ctx.stroke();}}
+ctx.globalAlpha=1;ctx.fillStyle='#637684';ctx.font='12px system-ui';ctx.fillText('X / Y / Z · mm',20,h-20);
+const origin=project(center);[['X',[1,0,0],'#c65a64'],['Y',[0,1,0],'#569573'],['Z',[0,0,1],'#5188b9']].forEach(([name,axis,color])=>{const p=project(add(center,axis.map(x=>x*span*.11)));const a=[w-90,h-72],b=[a[0]+p[0]-origin[0],a[1]+p[1]-origin[1]];path([a,b]);ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();ctx.fillStyle=color;ctx.fillText(name,b[0]+4,b[1]);});}
+function choose(index){current=data[index];selected=-1;zoom=1;const vertices=current.meshes.flatMap(m=>m.vertices),lo=[0,1,2].map(i=>vertices.reduce((v,p)=>Math.min(v,p[i]),Infinity)),hi=[0,1,2].map(i=>vertices.reduce((v,p)=>Math.max(v,p[i]),-Infinity));center=lo.map((x,i)=>(x+hi[i])/2);span=Math.max(...sub(hi,lo),1e-9);el('title').textContent=current.name;el('desc').textContent=current.description;const a=current.analysis;
+el('area').textContent=(a.patches.filter(p=>p.dimension===2&&p.classification==='active').reduce((s,p)=>s+p.area_m2,0)*1e6).toFixed(2)+' mm²';el('overlap').textContent=[...new Set(a.pair_diagnostics.map(d=>d.overlap.status))].join(', ');el('count').textContent=a.patches.length;el('unknown').textContent=(a.pair_diagnostics.reduce((s,d)=>s+(d.unresolved_area_m2||0),0)*1e6).toFixed(2)+' mm²';el('patches').replaceChildren();el('detail').textContent='';
+a.patches.forEach((p,i)=>{const b=document.createElement('button');b.className='patch';b.style.borderLeftColor=colors[p.classification];b.textContent=`${p.part_a} ↔ ${p.part_b} · ${p.classification} · ${p.dimension}D · ${(p.area_m2*1e6).toFixed(2)} mm²`;b.onclick=()=>{selected=selected===i?-1:i;document.querySelectorAll('.patch').forEach((x,j)=>x.classList.toggle('selected',j===selected));el('detail').textContent=selected<0?'':JSON.stringify({quality:p.quality,measure_kind:p.measure_kind,sampling_side:p.sampling_side,gap_interval_mm:p.gap_interval_m.map(x=>x*1000),regions:p.regions.length,provenance:p.provenance},null,2);draw();};el('patches').append(b);});draw();}
+data.forEach((d,i)=>el('cases').add(new Option(d.name,i)));el('cases').onchange=()=>choose(+el('cases').value);['meshes','normals','boundaries','sideb'].forEach(id=>el(id).onchange=draw);el('iso').onclick=()=>{yaw=-.65;pitch=.58;zoom=1;draw();};el('top').onclick=()=>{yaw=0;pitch=Math.PI/2;draw();};
+canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*.008;pitch=Math.max(-1.5,Math.min(1.57,pitch+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY];draw();};canvas.onpointerup=canvas.onpointercancel=()=>drag=null;canvas.onwheel=e=>{e.preventDefault();zoom=Math.max(.25,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));draw();};new ResizeObserver(draw).observe(canvas);choose(0);
+</script></html>
