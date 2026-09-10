@@ -43,8 +43,8 @@
 
 实现双树 BVH 与三角 AABB 距离界、point/triangle 最近点、vertex-face/edge-edge/edge-face 相交、独立 crossing/containment/winding overlap、双向自适应近接触带、保留各侧区域与法线场。局部索引有界复用，预算耗尽返回 partial/unknown/unresolved；曲面点/线恢复明确 unsupported。
 
-`test_proximity.py` 5 项、`test_curved_contact.py` 3 项通过。包含 brute-force 对照、面内部/边中部/穿越、完全包含/相同实体、空腔轴孔、开放/嵌套壳、预算、重三角化、阈值变化。冷/热实测 960×960 面输入精确检查 648 对，约 0.36/0.37 s，跟踪分配峰值 0.591 MiB；不是整体进程内存或实时保证。
+`test_proximity.py` 5 项、轴孔修正后 `test_curved_contact.py` 4 项通过。包含 brute-force 对照、面内部/边中部/穿越、完全包含/相同实体、空腔轴孔、开放/嵌套壳、预算、重三角化、阈值变化和全周完整性。冷/热实测 960×960 面输入精确检查 648 对，约 0.36/0.37 s，跟踪分配峰值 0.591 MiB；不是整体进程内存或实时保证。
 
-圆周 12/24/48 段距离误差收敛；固定网格的 4/2 mm 采样带估计一致，1 mm 在固定预算下不完整，显式记录而不宣称面积收敛。`benchmark.py` 和 `convergence.py` 可复现，详细结果在 M1 交接。
+圆周 12/24/48 段距离误差收敛。原版曲面遍历因过多细分，在轴孔例子中耗尽预算且没有完整覆盖；修正后用凸目标三角形见证点上界、所有可能最近面法线检查和最近点复用，提前认证整块单元。固定网格 4/2/1 mm 下轴侧面积都完整、预算未耗尽；孔壁端部边界仍有分辨率限制。`benchmark.py` 和 `convergence.py` 可复现，详细结果和新增覆盖字段见 M1 交接。
 
 inside/outside 前提仍为经用户核验的非自交封闭流形；没有认证任意自交 mesh。协议同时要求 `prepare/index/geometry_config`，只实现三个距离函数不足以替换整个 M1 mesh dispatcher。后续 06 只能把 complete/bounds 与 unknown 按各自语义消费，不能把 timeout 缓存成永久无解。

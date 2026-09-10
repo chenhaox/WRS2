@@ -8,6 +8,27 @@ from wrs.assembly.contact.mesh import analyze_mesh_pair
 
 
 class CurvedTests(unittest.TestCase):
+    def test_full_shaft_band_and_explicit_incomplete_coverage(self):
+        tube = Part('A',cylinder(radius=.015,inner_radius=.01,height=.02,sections=32))
+        shaft = Part('B',cylinder(radius=.0098,height=.01,sections=32))
+        cfg = ContactConfig(surface_resolution_m=.003,normal_angle_rad=.55,
+                            max_cells=4000,max_triangle_tests=100000)
+        result = analyze_pair(tube,pose(),shaft,pose(),config=cfg)
+        self.assertEqual(result.pair_diagnostics[0]['overlap']['status'],'separated')
+        self.assertFalse(any(p.classification=='active' for p in result.patches))
+        band = [p for p in result.patches if p.sampling_side=='b']
+        expected = 2*32*.0098*np.sin(np.pi/32)*.01
+        self.assertAlmostEqual(sum(p.area_m2 for p in band),expected,places=11)
+        self.assertEqual(sum(len(p.regions) for p in band),1)
+        self.assertTrue(all(p.quality=='bounded' and all(p.provenance['cell_band_bounded']) for p in band))
+        reports = result.pair_diagnostics[0]['curved_coverage']
+        self.assertTrue(all(c['unprocessed_area_m2']==0 for c in reports))
+        self.assertEqual(sum(c['unresolved_area_m2'] for c in reports if c['sampling_side']=='b'),0)
+        # A tiny budget must remain distinguishable from a complete band result.
+        from dataclasses import replace
+        partial = analyze_pair(tube,pose(),shaft,pose(),config=replace(cfg,max_triangle_tests=10))
+        self.assertGreater(sum(c['unprocessed_area_m2'] for c in partial.pair_diagnostics[0]['curved_coverage']),0)
+
     def test_sphere_band_threshold_and_budget(self):
         ball = Part('sphere',sphere(sections=16,rings=8))
         support = Part('support',rectangle())

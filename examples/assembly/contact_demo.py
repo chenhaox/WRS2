@@ -22,6 +22,8 @@ def cases():
     default = ContactConfig()
     curve = ContactConfig(near_tol_m=.0005, surface_resolution_m=.003,
                           normal_angle_rad=.55,max_cells=4000,max_triangle_tests=30000)
+    shaft_config = ContactConfig(near_tol_m=.0005, surface_resolution_m=.003,
+                                 normal_angle_rad=.55,max_cells=4000,max_triangle_tests=100000)
     return {
         'boxes': ('箱体的部分面接触', '两个 100 mm 箱体横向错开 25 mm。解析接触面积为 7,500 mm²。',
                   pair(box(),box(),pose((.025,0,.1))), default, .0075),
@@ -35,9 +37,9 @@ def cases():
                         pair(box(),box(),pose((0,0,.09))), default, 0),
         'sphere': ('球面与平面切触', '半径 25 mm 的离散球面与平面切触。显示的是 0.5 mm 近接触带估计，不能当成有限承载面积。',
                    pair(rectangle(),sphere(sections=16,rings=8),pose((0,0,.025))),curve,0),
-        'shaft': ('轴孔的正间隙', '轴半径 9.8 mm、孔半径 10 mm。真实三角网格最近距离约 0.199 mm；轴不穿入管壁。预算不足的区域明确保留。',
+        'shaft': ('轴孔的正间隙', '轴半径 9.8 mm、孔半径 10 mm；径向设计间隙 0.2 mm。橙色是 0.5 mm 距离阈值内的近接触带，实际接触面积为零。A 是孔壁，B 是轴壁；孔壁端部的带边界仍有分辨率误差。',
                   pair(cylinder(radius=.015,inner_radius=.01,height=.02,sections=32),
-                       cylinder(radius=.0098,height=.01,sections=32)),curve,0),
+                       cylinder(radius=.0098,height=.01,sections=32)),shaft_config,0),
     }
 
 
@@ -65,6 +67,13 @@ def main():
         area = sum(p.area_m2 for p in result.patches if p.dimension==2 and p.classification=='active')
         if expected is not None and not np.isclose(area,expected,rtol=1e-7,atol=1e-12):
             raise AssertionError(f'{key}: active area {area}, expected {expected}')
+        if key == 'shaft':
+            wall_area = 2*32*.0098*np.sin(np.pi/32)*.01
+            shaft_patches = [p for p in result.patches if p.measure_kind=='near_band' and p.sampling_side=='b']
+            if (not np.isclose(sum(p.area_m2 for p in shaft_patches),wall_area,rtol=1e-8)
+                    or sum(len(p.regions) for p in shaft_patches)!=1
+                    or any('budget_exhausted' in c['reason'] for d in result.pair_diagnostics for c in d['curved_coverage'])):
+                raise AssertionError('Shaft example must cover the full wall without exhausting either side budget')
         save_assembly(assembly,args.out_dir/f'{key}.assembly.json')
         save_report(result,args.out_dir/f'{key}.contacts.json')
         previews.append(preview_case(name,description,assembly,state,result))
