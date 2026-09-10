@@ -21,10 +21,13 @@ def main():
     parser.add_argument('--case', choices=('all', 'shaft', *FILES), default='all')
     parser.add_argument('--backend', choices=('mesh', 'sdf', 'both'), default='sdf')
     parser.add_argument('--repeat', type=int, default=3, help='Warm repetitions, each recomputes the band')
+    parser.add_argument('--resolution-mm', type=float, help='Override the terminal cell radius; smaller resolves finer boundaries')
     parser.add_argument('--out-dir', type=Path, default=ROOT/'examples/assembly/output/stl')
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error('--repeat must be >=1')
+    if args.resolution_mm is not None and (not np.isfinite(args.resolution_mm) or args.resolution_mm <= 0):
+        parser.error('--resolution-mm must be finite and positive')
     args.out_dir.mkdir(parents=True, exist_ok=True)
     # Import overhead is measured once and excluded from per-model cold analysis.
     start = perf_counter()
@@ -42,6 +45,9 @@ def main():
             cfg = replace(cfg, surface_resolution_m=.001, max_cells=60000, max_triangle_tests=500000)
         else:
             label, description, models, cfg = make_case(key)
+        if args.resolution_mm is not None:
+            cfg = replace(cfg, surface_resolution_m=args.resolution_mm/1000)
+            description += f' 本次覆盖终止单元半径：{args.resolution_mm:g} mm。'
         load_seconds = perf_counter()-start
         assembly = Assembly(tuple(m.as_part() for m in models))
         for name in names:

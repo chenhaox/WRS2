@@ -7,7 +7,6 @@ from ..model import ContactAnalysis, ContactPatch, Region, GeometryConfig, diges
 from ..geometry.proximity import MeshProximity
 from ..geometry.preprocess import prepare_mesh
 from ..geometry.sdf import SignedDistanceField, Open3DMeshSDF
-from ..geometry.mesh_bvh import closest_on_triangle
 from ..geometry.planar import cell_regions
 
 
@@ -37,6 +36,33 @@ class SDFConfig:
 def _areas(triangles):
     return np.linalg.norm(np.cross(triangles[:, 1]-triangles[:, 0],
                                    triangles[:, 2]-triangles[:, 0]), axis=1)/2
+
+
+def _triangle_vertex_upper(triangles, targets):
+    """Batch the maximum vertex distance to each paired convex target triangle.
+
+    Convexity makes this an upper bound for every point in the source triangle.
+    Oriented edge tests and degenerate edge fallbacks match the scalar BVH
+    primitive, without per-vertex Python calls or thousands of tiny cross calls.
+    """
+    edges = np.roll(targets, -1, axis=1)-targets
+    normals = np.cross(edges[:, 0], targets[:, 2]-targets[:, 0])
+    normal2 = np.einsum('ij,ij->i', normals, normals)
+    height = np.einsum('nvj,nj->nv', triangles-targets[:, None, 0], normals)
+    factor = np.divide(height, normal2[:, None], out=np.zeros_like(height),
+                       where=normal2[:, None] > np.finfo(float).tiny)
+    projected = triangles-factor[:, :, None]*normals[:, None]
+    cross = np.cross(edges[:, None], projected[:, :, None]-targets[:, None])
+    inside = np.all(np.einsum('nvej,nj->nve', cross, normals) >= -normal2[:, None, None]*1e-14, axis=2)
+    inside &= normal2[:, None] > np.finfo(float).tiny
+    delta = triangles[:, :, None]-targets[:, None]
+    edge2 = np.einsum('nej,nej->ne', edges, edges)
+    dots = np.einsum('nvej,nej->nve', delta, edges)
+    t = np.divide(dots, edge2[:, None], out=np.zeros_like(dots), where=edge2[:, None] > 0)
+    displacement = delta-np.clip(t, 0, 1)[:, :, :, None]*edges[:, None]
+    distance2 = np.einsum('nvej,nvej->nve', displacement, displacement).min(axis=2)
+    distance2 = np.where(inside, height*factor, distance2)
+    return np.sqrt(np.maximum(distance2.max(axis=1), 0))
 
 
 def _bisect_longest(triangle):
@@ -206,6 +232,8 @@ class SDFContactBackend:
     def _integrate(self, a, b, src, dst, ps, pt, source_field, target, ts, tt,
                    reverse, cfg, limit, global_lower):
         """Breadth-first integration; budget exhaustion retains all pending area."""
+        side_started = perf_counter()
+        query_seconds = upper_seconds = 0.0
         local = ps.mesh.vertices[ps.mesh.faces]
         world = local @ ts[:3, :3].T+ts[:3, 3]
         normals = ps.normals @ ts[:3, :3].T
@@ -268,6 +296,7 @@ class SDFContactBackend:
             radii = np.linalg.norm(triangles-centers[:, None, :], axis=2).max(1)
             probes = np.concatenate((centers[:, None, :], triangles), axis=1).reshape(-1, 3)
             query_local = (probes-tt[:3, 3]) @ tt[:3, :3]
+            query_started = perf_counter()
             values = target.query(query_local)
             # Native source normals belong to its zero set, not necessarily to
             # its integration tessellation. Vertex values check the domain;
@@ -276,6 +305,13 @@ class SDFContactBackend:
             source_values = None
             if not mesh_source:
                 source_values = source_field.query((probes-ts[:3, 3]) @ ts[:3, :3])
+            query_seconds += perf_counter()-query_started
+            witness_uppers = None
+            if mesh_target:
+                upper_started = perf_counter()
+                witness_uppers = _triangle_vertex_upper(
+                    query_local.reshape(-1, 4, 3)[:, 1:], target_triangles[values.face_ids[::4]])
+                upper_seconds += perf_counter()-upper_started
             queries += 4*count*fields_per_point
             visited += count
             areas = _areas(triangles)
@@ -304,10 +340,7 @@ class SDFContactBackend:
                     excluded += area
                     continue
                 if mesh_target:
-                    target_tri = target_triangles[values.face_ids[k]]
-                    tri_local = (tri-tt[:3, 3]) @ tt[:3, :3]
-                    witness_upper = max(np.linalg.norm(p-closest_on_triangle(p, target_tri)) for p in tri_local)
-                    upper = min(upper, witness_upper+e)
+                    upper = min(upper, float(witness_uppers[j])+e)
                 target_normals = values.normals_local[sample_slice] @ tt[:3, :3].T
                 margins = -np.einsum('ij,ij->i', source_normals, target_normals)-np.cos(cfg.normal_angle_rad)
                 facing = np.all(margins >= 0)
@@ -340,8 +373,10 @@ class SDFContactBackend:
                 pending.append((poly, center, clipped_area, ns, e, lower, upper, face_id))
             if pending:
                 points = np.asarray([row[1] for row in pending])
+                query_started = perf_counter()
                 witnesses = target.query((points-tt[:3, 3]) @ tt[:3, :3])
                 source_witnesses = None if mesh_source else source_field.query((points-ts[:3, 3]) @ ts[:3, :3])
+                query_seconds += perf_counter()-query_started
                 queries += len(pending)*fields_per_point
                 for j, (poly, center, area, ns, e, lower, upper, face_id) in enumerate(pending):
                     if not witnesses.valid[j] or (source_witnesses is not None and not source_witnesses.valid[j]):
@@ -352,6 +387,7 @@ class SDFContactBackend:
                     append_cell(poly, center, area, ns, float(witnesses.values_m[j]), e, lower, upper,
                                 bool(witnesses.signed[j]), witnesses.points_local_m[j] @ tt[:3, :3].T+tt[:3, 3],
                                 witnesses.normals_local[j] @ tt[:3, :3].T, face_id, int(witnesses.face_ids[j]))
+        region_started = perf_counter()
         patches = []
         for label, rows in entries.items():
             groups, boundary_ok = cell_regions([r[0] for r in rows], cfg.numerical_tol_m*4)
@@ -375,6 +411,8 @@ class SDFContactBackend:
                             'normal_test': 'source_cell_interior; target_centre_and_vertices; linear_boundary_clipping',
                             'area_reference': 'source_mesh',
                             'distance_interval': 'signed_sdf' if all(r[12] for r in rows) else 'unsigned'}))
+        region_seconds = perf_counter()-region_started
+        total_seconds = perf_counter()-side_started
         report = {'sampling_side': 'b' if reverse else 'a', 'source_area_m2': float(ps.areas_m2.sum()),
                   'estimated_band_area_m2': accepted, 'excluded_area_m2': excluded,
                   'bounded_band_area_m2': 0.0, 'unprocessed_area_m2': unprocessed,
@@ -383,6 +421,10 @@ class SDFContactBackend:
                   'unresolved_area_m2': uncertain+normal_uncertain+unprocessed+invalid,
                   'visited_cells': visited, 'sdf_query_points': queries, 'reason': reason,
                   'clipped_boundary_cells': clipped_cells,
+                  'timing_s': {'field_queries': query_seconds, 'triangle_upper_bounds': upper_seconds,
+                               'region_assembly': region_seconds,
+                               'refinement_clipping_other': total_seconds-query_seconds-upper_seconds-region_seconds,
+                               'side_total': total_seconds},
                   'normal_test': 'sampled', 'quality': 'estimated',
                   'area_accounting': 'accepted plus uncertain plus excluded plus invalid plus unprocessed equals source area; normal uncertainty overlaps accepted area'}
         return patches, report, negative

@@ -254,3 +254,7 @@ flowchart LR
 6. `.gitignore` 当前广泛忽略 JSON/NPZ/图像；fixture 优先由确定性生成器创建。需要跟踪的 fixture 单独添加窄范围例外，不能依赖未跟踪的本地文件。
 
 各 task 已附完整启动提示词。下一对话从 [04：接触图与运动学约束](tasks/04-contact-graph.zh.md) 开始，并读取 M1 交接。00—03 的提示词保留为设计记录，不需要重新从零实现。
+
+## 最新诊断
+
+[Bunny unknown、A/B 面、STL 锯齿及性能剖析](contact-diagnostics.zh.md)：包含 1 / 0.25 / 0.1 mm 分辨率对比、批量化前后计时及下一步加速方案。

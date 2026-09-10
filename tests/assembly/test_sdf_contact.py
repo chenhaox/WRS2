@@ -15,6 +15,21 @@ def plane_grid(direction=1, offset=0):
 
 
 class GridTests(unittest.TestCase):
+    def test_batched_convex_upper_bound_matches_scalar_geometry(self):
+        from wrs.assembly.contact.sdf_backend import _triangle_vertex_upper
+        from wrs.assembly.geometry.mesh_bvh import closest_on_triangle
+        rng = np.random.default_rng(20260910)
+        sources = rng.normal(size=(256, 3, 3))
+        targets = rng.normal(size=(256, 3, 3))
+        targets[0] = 0
+        targets[1, 2] = targets[1, 1]
+        targets[2, 2] = targets[2, 0]+.5*(targets[2, 1]-targets[2, 0])
+        for scale in (1, 1e-6, 1e4):
+            actual = _triangle_vertex_upper(sources*scale, targets*scale)
+            expected = [max(np.linalg.norm(p-closest_on_triangle(p, t*scale)) for p in s*scale)
+                        for s, t in zip(sources, targets)]
+            np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=scale*1e-14)
+
     def test_native_box_corners_do_not_remove_opposing_faces(self):
         axis = np.linspace(-.008, .008, 81)
         xyz = np.stack(np.meshgrid(axis, axis, axis, indexing='ij'), axis=-1)
