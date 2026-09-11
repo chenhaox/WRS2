@@ -2,7 +2,9 @@
 
 状态：**M1（00—03）与 M2（04—07）已实现；M3 的单/双臂模拟执行、独立回放与示例已实现**。2026-09-11。验证级别及范围见 [M2/M3 交接](m2-m3-execution.zh.md)。
 
-本轮新增：[多方向承载极限、真实 CUDA 批量求解、M2 距离 UI 与复杂例子](stability-sweep-and-sequence-ui.zh.md)。完整旧版功能核对与尚缺项目见[asp_old 对照](old-new-feature-audit.zh.md)；当前 M2/M3 基线不等于全部旧能力或实机工作流已迁移。
+最新审查：[真正六维采样、径向承载、任务尺度、作用反作用与 GPU 独立方程验证](wrench-stability-audit.zh.md)。默认改为 CUDA / wrench，修正旧生成器固定力/力矩比例的问题。
+
+此前新增：[多方向承载极限、真实 CUDA 批量求解、M2 距离 UI 与复杂例子](stability-sweep-and-sequence-ui.zh.md)。完整旧版功能核对与尚缺项目见[asp_old 对照](old-new-feature-audit.zh.md)；当前 M2/M3 基线不等于全部旧能力或实机工作流已迁移。
 
 主分支 UI 已合入，方向和静力 WRS 示例已增加接触面与显示控制，见[合并记录和用法](ui-merge-and-contact-display.zh.md)。
 

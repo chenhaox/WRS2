@@ -16,9 +16,13 @@ def single(mu=.5):
     s=a.initial_state(); return a,s,build_contact_graph(a,s,analyze_contacts(a,s))
 
 
+def cpu_config(**kwargs):
+    return StabilitySweepConfig(**(dict(backend='numpy',mode='force')|kwargs))
+
+
 class DirectionalStabilityTests(unittest.TestCase):
     def test_force_limits_against_analytic_sliding_and_lift(self):
-        a,s,g=single(); r=analyze_directional_stability(a,s,g,config=StabilitySweepConfig(direction_count=6))
+        a,s,g=single(); r=analyze_directional_stability(a,s,g,config=cpu_config(direction_count=6))
         self.assertEqual(r.status,'complete')
         np.testing.assert_allclose([c.score_n for c in r.cases[:5]], [9.81,9.81,19.62,9.81,9.81],atol=1e-7)
         self.assertEqual(r.cases[5].status,'limit_reached')
@@ -30,7 +34,7 @@ class DirectionalStabilityTests(unittest.TestCase):
 
     def test_torque_units_and_tipping(self):
         a,s,g=single(); r=analyze_directional_stability(a,s,g,directions=[[1,0,0]],
-                          config=StabilitySweepConfig(mode='torque',torque_length_m=.2))
+                          config=cpu_config(mode='torque',torque_length_m=.2))
         self.assertAlmostEqual(r.cases[0].torque_nm,19.62*.05,places=7)
         self.assertAlmostEqual(r.cases[0].score_n,19.62*.05/.2,places=7)
         self.assertEqual(r.cases[0].force_n,0.)
@@ -38,18 +42,18 @@ class DirectionalStabilityTests(unittest.TestCase):
     def test_stack_transfer_and_legacy_vs_highs(self):
         a,s,g=make_case('stack')
         for mode in ('force','torque','wrench','legacy_coupled'):
-            cfg=StabilitySweepConfig(direction_count=36,mode=mode)
+            cfg=cpu_config(direction_count=36,mode=mode)
             reference=analyze_directional_stability(a,s,g,config=replace(cfg,backend='highs'))
             batched=analyze_directional_stability(a,s,g,config=cfg)
             self.assertEqual(reference.status,'complete'); self.assertEqual(batched.status,'complete')
             np.testing.assert_allclose([c.score_n for c in batched.cases],[c.score_n for c in reference.cases],atol=1e-6)
             if mode=='legacy_coupled':
                 for c in batched.cases: self.assertLessEqual(c.torque_nm,np.sqrt(3)*.05*c.force_n+1e-7)
-        up=analyze_directional_stability(a,s,g,directions=[[0,0,1]])
+        up=analyze_directional_stability(a,s,g,directions=[[0,0,1]],config=cpu_config())
         np.testing.assert_allclose([c.force_n for c in up.cases],[29.43,19.62],atol=1e-7)
 
     def test_capacity_ceiling_is_not_reported_as_physical_limit(self):
-        a,s,g=single(); cfg=StabilitySweepConfig(max_score_n=1)
+        a,s,g=single(); cfg=cpu_config(max_score_n=1)
         r=analyze_directional_stability(a,s,g,directions=[[0,0,1]],config=cfg)
         self.assertTrue(r.diagnostics['minimum_is_lower_bound'])
         self.assertEqual(r.cases[0].status,'limit_reached')
@@ -58,12 +62,12 @@ class DirectionalStabilityTests(unittest.TestCase):
         self.assertAlmostEqual(capped.cases[0].force_n,25-19.62,places=7)
 
     def test_frictionless_rank_deficiency_falls_back(self):
-        a,s,g=single(0); r=analyze_directional_stability(a,s,g,directions=[[1,0,0],[0,0,1]])
+        a,s,g=single(0); r=analyze_directional_stability(a,s,g,directions=[[1,0,0],[0,0,1]],config=cpu_config())
         self.assertEqual(r.status,'complete'); self.assertEqual(r.diagnostics['fallback_problems'],2)
         np.testing.assert_allclose([c.force_n for c in r.cases],[0,19.62],atol=1e-7)
 
     def test_iteration_failure_never_means_zero_capacity(self):
-        a,s,g=single(); cfg=StabilitySweepConfig(max_iterations=1,fallback_to_highs=False)
+        a,s,g=single(); cfg=cpu_config(max_iterations=1,fallback_to_highs=False)
         r=analyze_directional_stability(a,s,g,config=cfg,directions=[[1,0,0]])
         self.assertEqual(r.status,'partial'); self.assertIsNone(r.sampled_minimum_n)
         self.assertEqual(r.cases[0].status,'unknown'); self.assertIsNone(r.cases[0].score_n)
@@ -72,12 +76,12 @@ class DirectionalStabilityTests(unittest.TestCase):
 
     def test_finite_auxiliary_supports_and_unstable_base(self):
         a,s,g=make_case('floating')
-        self.assertEqual(analyze_directional_stability(a,s,g).status,'unknown')
-        r=analyze_directional_stability(a,s,g,supports=case_supports('floating'),directions=[[0,0,-1]],part_ids=['lower'])
+        self.assertEqual(analyze_directional_stability(a,s,g,config=cpu_config()).status,'unknown')
+        r=analyze_directional_stability(a,s,g,supports=case_supports('floating'),directions=[[0,0,-1]],part_ids=['lower'],config=cpu_config())
         self.assertEqual(r.status,'complete'); self.assertAlmostEqual(r.cases[0].force_n,40-29.43,places=6)
 
     def test_repeatability_inputs_and_reused_model(self):
-        a,s,g=single(); analyzer=DirectionalStabilityAnalyzer(a,s,g)
+        a,s,g=single(); analyzer=DirectionalStabilityAnalyzer(a,s,g,config=cpu_config())
         p=analyzer.analyze([[1,0,0]]); q=analyzer.analyze([[1,0,0]])
         self.assertEqual(p.input_digest,q.input_digest); self.assertEqual(p.cases,q.cases)
         np.testing.assert_array_equal(disturbance_directions(37,'wrench'),disturbance_directions(37,'wrench'))

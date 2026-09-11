@@ -1,5 +1,7 @@
 # 与 asp_old 的功能核对
 
+后续多方向审查见[六维采样、方程和指标修正](wrench-stability-audit.zh.md)：默认已改为 CUDA / 完整六维径向求解。旧默认 `stabilitylib/stability.py` 也复用了内部接触变量；新版优势不能归因于“旧版完全没有消元”。
+
 2026-09-11；旧版 Git `9b886441d75f7ea79eafa4cdd5dc90d3c14dbac3`。新版本基于本轮开始时的 `4e5166e`，再加本轮批量稳定性、序列 UI 与距离查询优化。这里比较实际代码路径，不以实验脚本的文件名推断功能已经可用。
 
 用户目录 `D:/code/ch/asp/asp_old/assembly_planner` 仍只有 Git 对象。本轮使用 `git show HEAD:asp/...` 及同 commit 的 `D:/code/ch/asp/assembly_planner` 检出副本阅读；未执行旧 pickle 或修改旧仓库。旧默认入口是 `asp/sysplanner.py → asp/utils.py → asp/stabilitylib/stability.py`，`GWS=0`。

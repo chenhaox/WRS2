@@ -1,5 +1,7 @@
 # 多方向稳定性、CUDA 批量求解与 M2 距离控制
 
+> 历史阶段记录：后续[六维审查](wrench-stability-audit.zh.md)已将默认 NumPy / force 改为 CUDA / wrench，替换原固定力/力矩比例的生成器，并明确 `legacy_coupled` 不是固定六维射线的承载。下表仍是旧两幅值模式基准，不能用于描述新模式的采样或指标。
+
 2026-09-11，指定 Python `D:/code/venv312/.venv/Scripts/python.exe`。无新增或升级依赖。当前环境 PyTorch 2.9.0+cu128、CUDA 12.8，可用 RTX 5060 Laptop GPU，约 8 GB 显存。CPU 接口不会导入 PyTorch；显式 `backend='cuda'` 才加载它。
 
 ## 直接运行

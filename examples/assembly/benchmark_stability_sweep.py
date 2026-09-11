@@ -20,7 +20,7 @@ def main():
     parser.add_argument('--cases',nargs='+',default=['stack','bridge'])
     parser.add_argument('--counts',nargs='+',type=int,default=[300,6500])
     parser.add_argument('--backends',nargs='+',default=['highs','numpy','cuda'])
-    parser.add_argument('--mode',choices=['force','torque','wrench','legacy_coupled'],default='legacy_coupled')
+    parser.add_argument('--mode',choices=['force','torque','wrench','legacy_coupled'],default='wrench')
     parser.add_argument('--repeats',type=int,default=3)
     parser.add_argument('--large-repeats',type=int,default=None,help='optional repeat count for >=1000 directions')
     parser.add_argument('--batch-size',type=int,default=256)

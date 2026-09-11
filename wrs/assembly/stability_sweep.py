@@ -15,10 +15,11 @@ from .directions import fibonacci_directions
 
 @dataclass(frozen=True)
 class StabilitySweepConfig:
-    backend: str = 'numpy'
-    mode: str = 'force'
+    backend: str = 'cuda'
+    mode: str = 'wrench'
     direction_count: int = 300
     torque_length_m: float = .1
+    force_reference_n: float = 10.
     max_score_n: float = 100.
     batch_size: int = 256
     max_iterations: int = 256
@@ -31,8 +32,9 @@ class StabilitySweepConfig:
         if self.mode not in ('force','torque','wrench','legacy_coupled'): raise ValueError('Invalid disturbance mode')
         for name in ('direction_count','batch_size','max_iterations'):
             if type(getattr(self,name)) is not int or getattr(self,name)<1: raise ValueError(name+' must be positive integer')
-        if self.direction_count<6: raise ValueError('direction_count must include at least six coordinate directions')
-        for name in ('torque_length_m','max_score_n','optimality_tol_n'):
+        minimum=12 if self.mode=='wrench' else 6
+        if self.direction_count<minimum: raise ValueError(f'direction_count must include at least {minimum} coordinate directions')
+        for name in ('torque_length_m','force_reference_n','max_score_n','optimality_tol_n'):
             if not np.isfinite(getattr(self,name)) or getattr(self,name)<=0: raise ValueError(name+' must be positive')
         if type(self.fallback_to_highs) is not bool: raise ValueError('fallback_to_highs must be bool')
         if self.stability.disturbances:
@@ -63,23 +65,46 @@ class StabilitySweepResult:
     input_digest: str
     diagnostics: dict
     assumptions: tuple
-    schema_version: str = 'wrs.assembly.stability_sweep/1'
+    sampled_minimum_load_factor: float | None = None
+    schema_version: str = 'wrs.assembly.stability_sweep/2'
 
     def __post_init__(self):
         object.__setattr__(self,'directions',readonly(self.directions,shape=(None,6)))
         object.__setattr__(self,'cases',tuple(self.cases))
         object.__setattr__(self,'diagnostics',freeze(self.diagnostics))
         object.__setattr__(self,'assumptions',tuple(self.assumptions))
+        # Only radial modes define a load factor for a fixed normalized load.
+        value=(self.sampled_minimum_n/self.config.force_reference_n
+               if self.sampled_minimum_n is not None and self.config.mode!='legacy_coupled' else None)
+        object.__setattr__(self,'sampled_minimum_load_factor',value)
 
 
-def disturbance_directions(count=300,mode='force'):
-    """Deterministic samples plus coordinate axes; six-vector [force, torque]."""
-    if type(count) is not int or count<6: raise ValueError('Use at least 6 directions (includes the coordinate axes)')
+def disturbance_directions(count=300,mode='wrench'):
+    """Deterministic normalized [F, tau/L] directions, not physical SI vectors.
+
+    Wrench mode covers S^5 using normalized inverse-normal Halton points,
+    including the twelve signed 6D axes and antipodal pairs. These are finite
+    quasi-Monte Carlo samples, not an exact covering or random IID samples.
+    legacy_coupled retains the old S^2 x S^2 two-amplitude comparison.
+    """
+    minimum=12 if mode=='wrench' else 6
+    if type(count) is not int or count<minimum: raise ValueError(f'Use at least {minimum} directions (includes the coordinate axes)')
+    if mode=='wrench':
+        from scipy.stats import qmc
+        from scipy.special import ndtri
+        axes6=np.stack((np.eye(6),-np.eye(6)),axis=1).reshape(12,6)
+        if count==12: return axes6
+        engine=qmc.Halton(6,scramble=False)
+        engine.fast_forward(1)  # Skip the all-zero point before inverse CDF.
+        z=ndtri(engine.random((count-12+1)//2))
+        z/=np.linalg.norm(z,axis=1)[:,None]
+        paired=np.stack((z,-z),axis=1).reshape(-1,6)
+        return np.vstack((axes6,paired[:count-12]))
     axes=np.vstack((np.eye(3),-np.eye(3)))
     sphere=np.vstack((axes,fibonacci_directions(count-6))) if count>6 else axes
     if mode=='force': return np.column_stack((sphere,np.zeros_like(sphere)))
     if mode=='torque': return np.column_stack((np.zeros_like(sphere),sphere))
-    if mode not in ('wrench','legacy_coupled'): raise ValueError('Invalid disturbance mode')
+    if mode!='legacy_coupled': raise ValueError('Invalid disturbance mode')
     # Deterministic product-sphere samples. A finite set is not a guarantee for
     # every wrench in 6D. Include both aligned and opposed force/torque axes.
     from scipy.stats import qmc
@@ -134,11 +159,12 @@ class DirectionalStabilityAnalyzer:
         # Direction limits cannot be certified from an approximate curved subset.
         self.nominal=_check_equilibrium(assembly,state,graph,config=cfg.stability,
             external_wrenches=self.external_wrenches,supports=self.supports,_full_curves=True)
-        self.binding=digest(('directional_stability/1',assembly,state,graph,cfg,self.external_wrenches,self.supports))
+        self.binding=digest(('directional_stability/2',assembly,state,graph,cfg,self.external_wrenches,self.supports))
         self.batched=None; self.basis_setup_s=0.
         if self.nominal.status!='feasible':
             self.preparation_s=perf_counter()-started; return
         sites=self.nominal.force_sites
+        self.internal_sites=tuple(s for s in sites if s['part_a'] in self.index and s['part_b'] in self.index)
         count=sum(len(s['rays_on_b_world']) for s in sites)
         physical=np.zeros((len(self.free)*6,count)); caps={}; column=0
         for site in sites:
@@ -166,6 +192,7 @@ class DirectionalStabilityAnalyzer:
             common[row,indices]=1.; rhs[row]=capacity
         rhs[-1]=cfg.max_score_n
         self.common,self.rhs=common,rhs
+        self.capacity_count=len(caps)
         self.objective_count=2 if cfg.mode=='legacy_coupled' else 1
         if cfg.backend!='highs':
             from ._batched_lp import BatchedLP
@@ -190,7 +217,8 @@ class DirectionalStabilityAnalyzer:
 
     def analyze(self,directions=None,*,part_ids=None):
         cfg=self.config; started=perf_counter()
-        directions=_directions(disturbance_directions(cfg.direction_count,cfg.mode) if directions is None else directions,cfg.mode)
+        generated=directions is None
+        directions=_directions(disturbance_directions(cfg.direction_count,cfg.mode) if generated else directions,cfg.mode)
         part_ids=self.free if part_ids is None else tuple(part_ids)
         if not part_ids or len(set(part_ids))!=len(part_ids) or not set(part_ids).issubset(self.free):
             raise ValueError('Choose distinct present free parts')
@@ -198,7 +226,10 @@ class DirectionalStabilityAnalyzer:
         key=digest((self.binding,part_ids,directions)); cases=[]; fallback=0; iterations=[]; batches=0
         assumptions=(*self.nominal.assumptions,'independent_per_part_direction_loads',
             'minimum_over_sampled_directions_only','force_equivalent_score_N; torque_scaled_by_declared_length',
-            'score_ceiling_is_a_lower_bound_on_unresolved_larger_limits')
+            'score_ceiling_is_a_lower_bound_only_for_each_tested_ray',
+            'finite_sampling_does_not_certify_all_6D_or_simultaneous_multi_body_disturbances',
+            'legacy_coupled_is_not_a_fixed_6D_ray' if cfg.mode=='legacy_coupled' else
+            'single_radial_amplitude; F=alpha*dF; torque=alpha*L*dT; load_factor=alpha/Fref')
         if self.nominal.status!='feasible':
             return StabilitySweepResult('unknown',directions,(),None,None,cfg,key,
                 dict(reason='base_equilibrium_not_feasible',nominal_status=self.nominal.status,issues=self.nominal.issues,
@@ -263,6 +294,14 @@ class DirectionalStabilityAnalyzer:
         return StabilitySweepResult(status,directions,tuple(cases),worst,minimum,cfg,key,
             dict(preparation_s=self.preparation_s,query_s=perf_counter()-started,basis_setup_s=self.basis_setup_s,
                  batches=batches,effective_batch_size=batch_size,problems=len(jobs),force_variables=self.physical.shape[1],free_bodies=len(self.free),
+                 equilibrium_rows=6*len(self.free),capacity_constraints=self.capacity_count,
+                 internal_contact_sites=len(self.internal_sites),
+                 eliminated_duplicate_ray_variables=sum(len(s['rays_on_b_world']) for s in self.internal_sites),
+                 perturbed_bodies_per_problem=1,
+                 sampler=('halton_normal_S5_antipodal_axes12_v1' if cfg.mode=='wrench' else
+                          'legacy_product_S2xS2' if cfg.mode=='legacy_coupled' else 'fibonacci_S2_axes6') if generated else 'user_supplied',
+                 torque_reference_nm=cfg.force_reference_n*cfg.torque_length_m,
+                 global_wrench_ball_certified=False,
                  fallback_problems=int(fallback),batch_solver_s=batched_s,reference_solver_s=reference_s,
                  certificate_s=certificate_s,max_pivots=max(iterations,default=0),
                  gpu_name=self.batched.device_name if self.batched else None,

@@ -149,10 +149,14 @@ replay_execution(result, workcell, *, plan) -> dict
 ## 运动、受力和成功语义
 
 多方向极限另有 `DirectionalStabilityAnalyzer(...).analyze(directions=None, part_ids=None)` 与
-`analyze_directional_stability(...)`。返回 `wrs.assembly.stability_sweep/1`：每项
+`analyze_directional_stability(...)`。返回 `wrs.assembly.stability_sweep/2`：每项
 `optimal/limit_reached/unknown`，整批 `complete/partial/unknown`；有限采样最小值不证明所有方向。
 `limit_reached` 为查询上限处的承载下界，不是无穷大；未知项使 `sampled_minimum_n=None`。
-力矩评分显式按 `torque_length_m` 换算；实际载荷仍为 N / N·m。见[接口与实现](stability-sweep-and-sequence-ui.zh.md)。
+默认 `backend='cuda', mode='wrench'`。生成器为确定性的完整 S⁵ 采样，含 ±6 坐标轴；每次固定一个零件的一个六维方向，最大化单一径向幅值 α。
+力矩评分显式按 `torque_length_m` 换算；实际载荷仍为 N / N·m。
+任务力矩尺度 `T_ref=force_reference_n*torque_length_m`，无量纲
+`sampled_minimum_load_factor=sampled_minimum_n/force_reference_n`；`legacy_coupled` 不定义此径向指标。
+该采样最小值不是连续六维保证，也不检查多物体同时受扰。见[审查、方程与接口](wrench-stability-audit.zh.md)。
 
 运动 twist 使用 `[v_x,v_y,v_z,ω_x,ω_y,ω_z]`，同一世界坐标系，v 是指定参考点速度。为数值条件做长度归一化时保存 characteristic length，不能直接混合米与弧度距离。A 固定时对 B 的每个接触采样点使用 `n_A · (v_B + ω_B × r_B) >= 0`。
 

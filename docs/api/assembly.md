@@ -137,7 +137,7 @@ _Static equilibrium with paired forces and an inscribed friction pyramid._
 ## `wrs.assembly.stability_sweep`
 _Directional disturbance limits, sharing one physical contact-force model._
 
-- `disturbance_directions(count=300, mode='force')` — Deterministic samples plus coordinate axes; six-vector [force, torque].
+- `disturbance_directions(count=300, mode='wrench')` — Deterministic normalized [F, tau/L] directions, not physical SI vectors.
 - `analyze_directional_stability(assembly, state, graph, *, config=None, directions=None, part_ids=None, external_wrenches=(), supports=())`
 - `limit_wrench(result, index)` — External load at a selected solved limit, reusable by check_equilibrium.
 - **class `StabilitySweepConfig`**
