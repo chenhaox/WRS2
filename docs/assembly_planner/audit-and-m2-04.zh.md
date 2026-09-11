@@ -1,6 +1,7 @@
 # M1 审查与 M2.04 交接
 
 2026-09-11；基于 `b4c6ced` 审查。开发分支 `codex/assembly-planner`。
+实现与验收提交：`e73e6f4`。
 全部计算使用 `D:\code\venv312\.venv\Scripts\python.exe`，没有新增或升级依赖。
 
 ## 结论与修复
