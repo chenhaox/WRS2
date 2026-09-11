@@ -24,7 +24,7 @@ def analyze_pair(part_a, tf_a, part_b, tf_b, *, config=None, backend=None):
     if part_a.part_id == part_b.part_id:
         raise ValueError('A pair must contain distinct instance IDs')
     ta, tb = checked_tf(tf_a), checked_tf(tf_b)
-    state_key = digest((part_a.geometry.geometry_id, part_b.geometry.geometry_id,
+    state_key = digest(('mesh_contact/2', part_a.geometry.geometry_id, part_b.geometry.geometry_id,
                         part_a.part_id, part_b.part_id, ta, tb, cfg, backend.geometry_config, backend.tol))
     pa, sa = backend.prepare(part_a.geometry)
     pb, sb = backend.prepare(part_b.geometry)
@@ -83,11 +83,14 @@ def analyze_pair(part_a, tf_a, part_b, tf_b, *, config=None, backend=None):
 def analyze_contacts(assembly, state, *, config=None, backend=None):
     """Analyze present instances, preserving their explicit poses and design mates."""
     from .backends import ContactAnalyzer, ContactBackend
+    from .graph import state_geometry_binding
+    binding = state_geometry_binding(assembly, state)
     if isinstance(backend, (str, ContactBackend)):
         from dataclasses import replace
         result = ContactAnalyzer(backend, config=config).analyze(assembly.parts, poses=state.poses)
         mates = tuple(m for m in assembly.mating_relations if m.part_a in state.poses and m.part_b in state.poses)
         return replace(result, mating_relations=mates,
+                       input_binding=binding,
                        state_digest=digest((result.state_digest, state.world_revision)))
     cfg = config or ContactConfig()
     backend = backend or MeshProximity(numerical_tol_m=cfg.numerical_tol_m)
@@ -102,5 +105,5 @@ def analyze_contacts(assembly, state, *, config=None, backend=None):
         stats.append(result.statistics)
     mates = tuple(m for m in assembly.mating_relations if m.part_a in state.poses and m.part_b in state.poses)
     return ContactAnalysis(tuple(patches), tuple(diagnostics),
-                           digest(([(p.part_id, p.geometry.geometry_id) for p in assembly.parts], state, cfg, backend.geometry_config, backend.tol)),
-                           mates, {'pair_count': len(diagnostics), 'pairs': stats})
+                           digest(('mesh_contact/2', [(p.part_id, p.geometry.geometry_id) for p in assembly.parts], state, cfg, backend.geometry_config, backend.tol)),
+                           mates, {'pair_count': len(diagnostics), 'pairs': stats}, input_binding=binding)

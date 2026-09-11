@@ -10,10 +10,18 @@ __all__ = ['Assembly', 'AssemblyState', 'ContactAnalysis', 'ContactConfig',
            'save_assembly', 'save_report', 'analyze_pair', 'analyze_contacts',
            'ContactModel', 'ContactAnalyzer', 'ContactBackend', 'MeshContactBackend',
            'SDFContactBackend', 'SDFConfig', 'GridSDF', 'SignedDistanceField', 'SDFSamples', 'SDFCollisionChecker',
-           'ToleranceContactPolicy']
+           'ToleranceContactPolicy', 'ContactGraph', 'build_contact_graph', 'ConstraintConfig',
+           'LocalConstraints', 'MotionCandidates', 'contact_constraints', 'candidate_motions', 'rebase_twist']
 
 
 def __getattr__(name):
+    if name in ('ContactGraph', 'build_contact_graph'):
+        from .contact import graph
+        return getattr(graph, name)
+    if name in ('ConstraintConfig', 'LocalConstraints', 'MotionCandidates',
+                'contact_constraints', 'candidate_motions', 'rebase_twist'):
+        from . import constraints
+        return getattr(constraints, name)
     if name == 'ToleranceContactPolicy':
         from .contact.policy import ToleranceContactPolicy
         return ToleranceContactPolicy

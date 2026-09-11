@@ -84,9 +84,9 @@ class SDFCollisionChecker:
                   'touch_evidence': None, 'touch_triangle_tests': 0,
                   'sides': [], 'query_points': 0, 'interior_query_points': 0, 'aabb_distance_lower_m': lower,
                   'resolution_m': self.resolution_m, 'max_query_points': self.max_query_points,
-                  'state_digest': digest((a.geometry_key, b.geometry_key, ta, tb, self.resolution_m,
+                  'state_digest': digest((a.name, a.geometry_key, b.name, b.geometry_key, ta, tb, self.resolution_m,
                                           self.max_query_points, self.batch_size, self.penetration_tol_m,
-                                          self.use_aabb, self.max_touch_tests, self._provider_key, 'sdf_collision/2'))}
+                                          self.use_aabb, self.max_touch_tests, self._provider_key, 'sdf_collision/3'))}
         if self.use_aabb and lower > guard:
             report.update(status='separated', quality='aabb_bound', reason='disjoint_aabb')
             report['timing_s'] = {'prepare': 0.0, 'query': perf_counter()-start, 'total': perf_counter()-start}

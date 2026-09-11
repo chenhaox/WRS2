@@ -106,7 +106,7 @@ provenance                    # 后端版本、几何/状态摘要、source face
 
 以下签名是模块协作目标，具体 dataclass 字段由 00 落地后成为单一真源。
 
-下面 io / preprocess / surfaces / proximity / analyze_pair / analyze_contacts 已存在；`build_contact_graph` 及后续规划层尚不存在。M1 dispatcher 使用的 MeshProximity 还需要 `geometry_config`、`prepare(mesh)`、`index(mesh)`；CAD 后端不能只实现三个距离函数就假装兼容 mesh dispatcher。
+下面 io / preprocess / surfaces / proximity / analyze_pair / analyze_contacts、`build_contact_graph`、`contact_constraints`、`candidate_motions` 已存在；静力、有限路径与序列层尚不存在。M2.04 的状态绑定、归一化和有限性说明见 [交接](audit-and-m2-04.zh.md)。M1 dispatcher 使用的 MeshProximity 还需要 `geometry_config`、`prepare(mesh)`、`index(mesh)`；CAD 后端不能只实现三个距离函数就假装兼容 mesh dispatcher。
 
 ```python
 # io / preprocess / surfaces

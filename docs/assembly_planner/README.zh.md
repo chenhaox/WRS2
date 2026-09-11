@@ -1,10 +1,10 @@
 # Assembly Planner 重构：implementation plan
 
-状态：**M1（00—03）已实现并验收；M2/M3 待实施**。2026-09-10。
+状态：**M1（00—03）已实现并完成追加审查；M2 的 04 已实现，05—07 待实施；M3 待实施**。2026-09-11。
 
-最新更新：[Touching 判定与点、线、面显示](touching.zh.md)。此前：[容差接触规则与穿入表面显示](tolerance-contact-and-penetration.zh.md)、[SDF 批量化与碰撞测试](sdf-collision-and-vectorization.zh.md)、[轴孔边界修正与真实 STL](sdf-stl-validation.zh.md)。
+最新更新：[M1 审查、性能优化与 M2.04 交接](audit-and-m2-04.zh.md)。此前：[Touching 判定与点、线、面显示](touching.zh.md)、[容差接触规则与穿入表面显示](tolerance-contact-and-penetration.zh.md)、[SDF 批量化与碰撞测试](sdf-collision-and-vectorization.zh.md)。
 
-先看 [M1 使用方法、例子与交接](m1.zh.md) 和新增的 [ContactModel 多后端与 SDF 设计](contact-backends.zh.md)。现已提供 mesh / SDF 两个算法后端、Open3D 网格字段与原生 GridSDF 输入。当前交付是独立接触几何分析，不包含装配序列、静力稳定性或机器人执行求解。
+先看 [M1 使用方法、例子与交接](m1.zh.md) 和 [ContactModel 多后端与 SDF 设计](contact-backends.zh.md)。现已提供 mesh / SDF 两个算法后端、Open3D 网格字段与原生 GridSDF 输入，并新增接触图和局部运动候选；尚不包含装配序列、静力稳定性或机器人执行求解。
 
 目标：在第三代 WRS 中重新建立装配规划能力，以可解释、可验证的几何接触分析为基础，支持装配方向、重力稳定性、辅助夹持、序列搜索和机器人执行。
 
@@ -21,7 +21,7 @@
 
 两个 WRS 仓库在检查时具有相同 HEAD。旧源码参考副本跳过了一个名称含换行的 PDF；另有 `Test.jpg` / `test.jpg` 大小写冲突。这些 Windows 检出问题不涉及本次阅读的 `asp`、`asp_exp` 源码。不要修改用户仍在克隆的目录；后续可在克隆完成后切换参考路径并记录 commit。
 
-每个新对话先阅读本文件、[接口约定](contracts.zh.md)、[M1 交接](m1.zh.md)，再执行对应任务文档。00—03 已落地，04—10 的未来 API 尚未实现。本轮没有创建额外对话。
+每个新对话先阅读本文件、[接口约定](contracts.zh.md)、[M1 交接](m1.zh.md) 和 [M2.04 交接](audit-and-m2-04.zh.md)，再执行对应任务文档。00—04 已落地，05—10 的未来 API 尚未实现。本轮没有创建额外对话。
 
 ## 统一 Python 解释器
 
@@ -220,7 +220,7 @@ flowchart LR
 里程碑：
 
 - **M1：可靠接触分析（00—03），已完成**。已实现平面区域与点/线接触、曲面近接触带、BVH 距离与独立 overlap 诊断；未知/预算耗尽显式报告。适用假设与未支持场景见 M1 交接。不依赖机器人和物理仿真。
-- **M2：几何与静力装配规划（04—07）**。输出序列、零件路径、支撑需求；明确执行状态仍未验证。
+- **M2：几何与静力装配规划（04—07），04 已完成**。已提供接触图和局部运动候选；05—07 将输出静力证据、序列、零件路径、支撑需求，执行状态仍需单独验证。
 - **M3：机器人可执行示例（08、10）**。正向 replay、抓取/IK、全过程支撑和允许接触均通过。CAD 09 不阻塞纯 STL 基线。
 
 ## 首批验收数据
@@ -253,7 +253,7 @@ flowchart LR
 5. 新增公共 API 后运行 `& 'D:\code\venv312\.venv\Scripts\python.exe' tools/gen_api_index.py`；并行开发时由整合任务统一生成，避免整份索引相互覆盖。
 6. `.gitignore` 当前广泛忽略 JSON/NPZ/图像；fixture 优先由确定性生成器创建。需要跟踪的 fixture 单独添加窄范围例外，不能依赖未跟踪的本地文件。
 
-各 task 已附完整启动提示词。下一对话从 [04：接触图与运动学约束](tasks/04-contact-graph.zh.md) 开始，并读取 M1 交接。00—03 的提示词保留为设计记录，不需要重新从零实现。
+各 task 已附完整启动提示词。下一对话从 [05：静力平衡和辅助支撑](tasks/05-stability.zh.md) 开始，并读取 [M2.04 交接](audit-and-m2-04.zh.md)。00—04 的提示词保留为设计记录，不需要重新从零实现。
 
 ## 最新诊断
 

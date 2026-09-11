@@ -113,43 +113,56 @@ def cell_regions(cells, tol):
     """
     if not cells:
         return (), True
-    ids, points, indexed = {}, [], []
-    origin = np.asarray(cells[0][0])
-    for cell in cells:
-        if np.shape(cell)[1] == 2 and polygon_measure(cell)[0] < 0:
-            cell = cell[::-1]
-        seq = []
-        for p in cell:
-            key = tuple(np.rint((p - origin) / tol).astype(np.int64))
-            if key not in ids:
-                ids[key] = len(points)
-                points.append(p)
-            seq.append(ids[key])
-        indexed.append(seq)
-    points = np.asarray(points)
+    if not np.isfinite(tol) or tol <= 0:
+        raise ValueError('Cell topology tolerance must be positive and finite')
+    oriented = [c[::-1] if np.shape(c)[1] == 2 and polygon_measure(c)[0] < 0 else c for c in cells]
+    lengths = np.asarray([len(c) for c in oriented])
+    flat = np.concatenate(oriented)
+    # Preserve first-occurrence IDs and representative coordinates. Sorting
+    # unique quantized keys alone would change deterministic boundary order.
+    keys = np.rint((flat-np.asarray(cells[0][0]))/tol).astype(np.int64)
+    _, first, inverse = np.unique(keys, axis=0, return_index=True, return_inverse=True)
+    order = np.argsort(first)
+    remap = np.empty_like(order)
+    remap[order] = np.arange(len(order))
+    indexed = remap[inverse]
+    points = flat[first[order]]
     tree = cKDTree(points)
+    starts = np.r_[0, np.cumsum(lengths)[:-1]]
+    ends = np.cumsum(lengths)-1
+    next_index = np.arange(len(flat))+1
+    next_index[ends] = starts
+    a, b = indexed, indexed[next_index]
+    delta = points[b]-points[a]
+    length2 = np.einsum('ij,ij->i', delta, delta)
+    keep = length2 > tol*tol
+    owners = np.repeat(np.arange(len(cells)), lengths)[keep]
+    a, b, delta, length2 = a[keep], b[keep], delta[keep], length2[keep]
+    lengths_m = np.sqrt(length2)
     edge_owners = defaultdict(list)
-    cell_edges = []
-    for cid, seq in enumerate(indexed):
-        edges = []
-        for i, a in enumerate(seq):
-            b = seq[(i + 1) % len(seq)]
-            d = points[b] - points[a]
-            length2 = np.dot(d, d)
-            if length2 <= tol * tol:
-                continue
-            nearby = np.asarray(sorted(tree.query_ball_point((points[a]+points[b])/2,
-                                                             np.sqrt(length2)/2 + 2*tol)))
-            ts = (points[nearby] - points[a]) @ d / length2
-            dist = np.linalg.norm(points[nearby] - points[a] - ts[:, None] * d, axis=1)
-            inside = np.flatnonzero((ts >= -tol / np.sqrt(length2)) &
-                                    (ts <= 1 + tol / np.sqrt(length2)) & (dist <= 2 * tol))
-            ordered = nearby[inside[np.argsort(ts[inside], kind='stable')]]
-            for x, y in zip(ordered[:-1], ordered[1:]):
-                if x != y and np.linalg.norm(points[x] - points[y]) > tol * .5:
-                    edges.append((int(x), int(y)))
-                    edge_owners[tuple(sorted((int(x), int(y))))].append(cid)
-        cell_edges.append(edges)
+    cell_edges = [[] for _ in cells]
+    # Query sparse neighborhoods in bounded batches, then project all returned
+    # candidates together. T-junction splitting still uses the same tolerance;
+    # no dense edges-by-vertices matrix and no boundary smoothing are involved.
+    for start in range(0, len(a), 256):
+        end = min(start+256, len(a))
+        nearby = tree.query_ball_point((points[a[start:end]]+points[b[start:end]])/2,
+                                      lengths_m[start:end]/2+2*tol, return_sorted=True)
+        edge_ids = np.repeat(np.arange(start, end), [len(n) for n in nearby])
+        vertex_ids = np.concatenate(nearby).astype(np.int64)
+        d = points[vertex_ids]-points[a[edge_ids]]
+        ts = np.einsum('ij,ij->i', d, delta[edge_ids])/length2[edge_ids]
+        dist = np.linalg.norm(d-ts[:, None]*delta[edge_ids], axis=1)
+        mask = ((ts >= -tol/lengths_m[edge_ids]) & (ts <= 1+tol/lengths_m[edge_ids]) & (dist <= 2*tol))
+        edge_ids, vertex_ids, ts = edge_ids[mask], vertex_ids[mask], ts[mask]
+        order = np.lexsort((ts, edge_ids))
+        edge_ids, vertex_ids = edge_ids[order], vertex_ids[order]
+        x, y = vertex_ids[:-1], vertex_ids[1:]
+        link = ((edge_ids[:-1] == edge_ids[1:]) & (x != y)
+                & (np.linalg.norm(points[x]-points[y], axis=1) > tol*.5))
+        for cid, x, y in zip(owners[edge_ids[:-1][link]].tolist(), x[link].tolist(), y[link].tolist()):
+            cell_edges[cid].append((x, y))
+            edge_owners[(min(x, y), max(x, y))].append(cid)
     parent = list(range(len(cells)))
 
     def find(i):

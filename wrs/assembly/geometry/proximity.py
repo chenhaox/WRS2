@@ -117,11 +117,11 @@ class MeshProximity:
         best, witness, ids, lower, status = np.inf, None, None, 0.0, 'complete'
         try:
             for lower, ia, ib in node_pairs(a, b):
-                if lower > best:
+                if lower >= best:
                     break
                 for i in ia:
                     for j in ib:
-                        if aabb_distance(a.tri_lo[i],a.tri_hi[i],b.tri_lo[j],b.tri_hi[j]) > best:
+                        if aabb_distance(a.tri_lo[i],a.tri_hi[i],b.tri_lo[j],b.tri_hi[j]) >= best:
                             continue
                         budget.consume()
                         pa, pb, _ = triangle_pair(a.triangles[i], b.triangles[j], self.tol)

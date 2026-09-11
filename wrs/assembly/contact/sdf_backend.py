@@ -100,7 +100,7 @@ class SDFContactBackend:
             runtime = version('open3d')
         except PackageNotFoundError:
             runtime = None
-        return digest(('sdf_contact/3', self.sdf_config, self.geometry_config, runtime))
+        return digest(('sdf_contact/4', self.sdf_config, self.geometry_config, runtime))
 
     def prepare(self, model):
         """Return cached surface preprocessing and a field in the same local frame.
@@ -108,7 +108,12 @@ class SDFContactBackend:
         A supplied field is checked at mesh vertices and triangle centroids.
         This detects unit/frame mismatches but does not certify the whole zero set.
         """
-        key = model.geometry_key
+        # Field validity depends on topology cleanup and sign policy, not only
+        # on mesh bytes. Reconfiguration must never reuse an unsigned field
+        # under a newly strict policy.
+        key = (model.geometry_key, self.geometry_config,
+               self.sdf_config.nsamples, self.sdf_config.open_surface)
+        self._mesh.geometry_config = self.geometry_config
         if key in self._fields:
             self._fields.move_to_end(key)
             self.cache_hits += 1

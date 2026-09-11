@@ -48,6 +48,10 @@ def prepare_mesh(mesh, *, config=None):
     if len(kept) != len(fs):
         diagnostics.append(f'cleaned_faces:{len(fs)-len(kept)};removed_degenerate_area_m2:{removed_area:.9g}')
     fs = np.asarray(kept, dtype=np.int64)
+    used, compact = np.unique(fs, return_inverse=True)
+    if len(used) != len(vs):
+        diagnostics.append(f'removed_unreferenced_vertices:{len(vs)-len(used)}')
+        vs, fs = vs[used], compact.reshape(-1, 3)
     edge_map = defaultdict(list)
     for i, face in enumerate(fs):
         for a, b in zip(face, np.roll(face, -1)):

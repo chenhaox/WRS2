@@ -33,7 +33,7 @@ class MeshContactBackend:
 
     @property
     def cache_key(self):
-        return digest(('mesh_contact/1', self.proximity.geometry_config, self.proximity.tol))
+        return digest(('mesh_contact/2', self.proximity.geometry_config, self.proximity.tol))
 
     def analyze_pair(self, a, tf_a, b, tf_b, *, config):
         """Analyze the supplied integration meshes, retaining native-field provenance."""

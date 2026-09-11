@@ -324,12 +324,14 @@ class ContactAnalysis:
     mating_relations: tuple[MatingRelation, ...] = ()
     statistics: Mapping = field(default_factory=dict)
     schema_version: str = 'wrs.assembly.contact/1'
+    input_binding: Mapping = field(default_factory=dict)
 
     def __post_init__(self):
         object.__setattr__(self, 'patches', tuple(self.patches))
         object.__setattr__(self, 'pair_diagnostics', tuple(freeze(d) for d in self.pair_diagnostics))
         object.__setattr__(self, 'mating_relations', tuple(self.mating_relations))
         object.__setattr__(self, 'statistics', freeze(self.statistics))
+        object.__setattr__(self, 'input_binding', freeze(self.input_binding))
 
     def to_dict(self):
         """Return a JSON-compatible report with all geometric witnesses."""

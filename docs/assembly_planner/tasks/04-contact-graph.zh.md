@@ -1,6 +1,6 @@
 # 04：Contact graph 与装配运动约束
 
-状态：待实施。前置：02；完整曲面和穿透验收需 03。
+状态：2026-09-11 已实现并验收，见 [M1 审查与 M2.04 交接](../audit-and-m2-04.zh.md)。前置：02、03。
 
 ## 目标和修改范围
 
@@ -38,4 +38,6 @@
 
 ## 交接记录
 
-待填：graph API、候选格式、参考点/归一化约定、缓存摘要、测试与基线。当前未实施。
+已交付 `ContactGraph`、`build_contact_graph`、`contact_constraints`、`candidate_motions`、`rebase_twist` 和 `ConstraintConfig`。通过新 `input_binding` 拒绝旧几何/位姿/revision；不缓存世界状态结果。平移/六维使用非零归一化候选和逐点约束，near/mating 独立保留，曲面采样与未求解 active 暴露诊断。
+
+新增 graph/constraints 共 10 项验收测试，涵盖实例身份、状态失效、A/B 符号、对向切向、参考点不变性、区域顶点旋转约束、正间隙轴孔和未知状态；总测试 73 项。六个交互例子位于 `examples/assembly/m2_contact_graph_demo.py`，候选生成预热中位数约 1.5—12 ms。字段、假设、运行命令和任务 05 接口注意事项见上述交接。
