@@ -60,7 +60,9 @@ def round_cone_reference(assembly,state,sites,loads=()):
     settings = clarabel.DefaultSettings()
     settings.verbose = False
     settings.tol_gap_abs = settings.tol_feas = settings.tol_gap_rel = 1e-10
-    result = clarabel.DefaultSolver(sparse.csc_matrix((count,count)),q,
+    # A strictly convex force cost avoids a flat optimum producing AlmostSolved
+    # after removing redundant sites. Feasibility constraints are unchanged.
+    result = clarabel.DefaultSolver(.001*sparse.eye(count,format='csc'),q,
         sparse.csc_matrix(np.vstack(A)),np.concatenate(b),cones,settings).solve()
     if str(result.status)=='PrimalInfeasible': return 'infeasible'
     if str(result.status)!='Solved': return 'unknown'

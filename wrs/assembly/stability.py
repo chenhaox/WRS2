@@ -3,13 +3,14 @@
 Feasibility concerns the declared rigid contact/force model. It does not prove
 dynamic stability, robot grasp feasibility or resistance to untested loads.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import combinations
 from time import perf_counter
 import numpy as np
 from scipy import sparse
 from scipy.optimize import linprog
 from .model import readonly, freeze, digest
+from .force_points import prepare_force_points
 
 
 @dataclass(frozen=True, eq=False)
@@ -78,8 +79,21 @@ class StabilityConfig:
     allow_idealized_contact: bool = False
     solver_time_limit_s: float = 5.
     disturbances: tuple[LoadCase, ...] = ()
+    reduce_contact_points: bool = True
+    curved_point_budget: int = 64
+    curved_point_spacing_m: float = .005
+    curved_normal_angle_rad: float = np.pi/18
 
     def __post_init__(self):
+        if not isinstance(self.reduce_contact_points,bool):
+            raise ValueError('reduce_contact_points must be a bool')
+        if (not isinstance(self.curved_point_budget,int) or isinstance(self.curved_point_budget,bool)
+                or self.curved_point_budget<4):
+            raise ValueError('curved_point_budget must be an integer >= 4')
+        if not np.isfinite(self.curved_point_spacing_m) or self.curved_point_spacing_m<=0:
+            raise ValueError('curved_point_spacing_m must be positive and finite')
+        if not np.isfinite(self.curved_normal_angle_rad) or not 0<self.curved_normal_angle_rad<np.pi:
+            raise ValueError('curved_normal_angle_rad must be in (0, pi)')
         if (not isinstance(self.friction_sides, int) or isinstance(self.friction_sides, bool)
                 or self.friction_sides < 4 or self.friction_sides % 2):
             raise ValueError('friction_sides must be an even integer >= 4')
@@ -148,22 +162,34 @@ def _generators(normal, friction, sides):
 
 
 def _contact_points(patch):
-    n = patch.normals_a_world
-    cells = [c for region in patch.regions for c in region.cells_world_m if len(c)]
-    if patch.dimension > 0 and len(n) and np.all(n == n[0]) and cells:
-        points = np.unique(np.concatenate(cells), axis=0)
-        normals = np.tile(n[0], (len(points), 1))
-    else:
-        # A common point for each action/reaction pair preserves net moment.
-        points = (patch.points_a_world_m+patch.points_b_world_m)/2
-        normals = n
-    if not len(points):
-        return points, normals
-    joined = np.unique(np.column_stack((points, normals)), axis=0)
-    return joined[:, :3], joined[:, 3:]
+    """Cleaned full sites, retained for diagnostics and baseline benchmarks."""
+    result,_ = prepare_force_points(patch,reduce=False)
+    return result.points,result.normals
 
 
 def check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=(), supports=()):
+    """Check a reduced force model, retrying all curved sites on any failed load.
+
+    Planar hulls preserve the patch wrench model to arithmetic roundoff. Curved
+    samples are only a subset: their failure is never a final infeasibility claim.
+    Returned sites/forces always belong to the final common model for all loads.
+    """
+    started = perf_counter()
+    cfg = config or StabilityConfig()
+    external_wrenches,supports = tuple(external_wrenches),tuple(supports)
+    result = _check_equilibrium(assembly,state,graph,config=cfg,
+        external_wrenches=external_wrenches,supports=supports)
+    failed = [c.name for c in (result.nominal,*result.disturbances) if c is not None and c.status!='feasible']
+    if result.diagnostics.get('curved_sampling_used',False) and failed:
+        attempt = dict(status=result.status,force_points=result.diagnostics['force_points'],failed_loads=failed)
+        result = _check_equilibrium(assembly,state,graph,config=cfg,external_wrenches=external_wrenches,
+                                    supports=supports,_full_curves=True)
+        return replace(result,diagnostics=dict(result.diagnostics,curved_fallback=True,
+            reduced_attempt=attempt,elapsed_s=perf_counter()-started))
+    return result
+
+
+def _check_equilibrium(assembly, state, graph, *, config, external_wrenches, supports, _full_curves=False):
     """Balance every free body under gravity and declared loads.
 
     Only qualified active contacts supply forces. Fixed supports are ideal
@@ -191,7 +217,7 @@ def check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=
     assumptions = ['rigid_nominal_contacts', 'fixed_supports_have_unlimited_reaction',
                    f'inscribed_friction_polygon_{cfg.friction_sides}_sides',
                    'pair_friction_is_minimum_of_declared_material_values',
-                   'uniform_contact_uses_cell_vertices; varying_normals_use_supplied_points',
+                   'force_points_cleaned_per_patch; optional_planar_hull_and_curved_subset',
                    'infeasible_means_this_discrete_force_model_only']
     if cfg.max_contact_normal_force_n is None:
         assumptions.append('contact_normal_force_capacity_unbounded')
@@ -211,7 +237,7 @@ def check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=
         return EquilibriumResult('unknown', None, (), 'unknown', tuple(sorted(issues)),
                                  tuple(assumptions), key, {'elapsed_s':perf_counter()-start})
 
-    records, groups = [], []
+    records, groups, point_diagnostics = [], [], []
     for edge in graph.edges:
         if not any(k in body_index for k in edge.part_ids):
             continue
@@ -236,7 +262,11 @@ def check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=
             if any(mu is None for mu in mus):
                 issues.add(tag+':unknown_friction')
                 continue
-            points, normals = _contact_points(patch)
+            prepared,cache_hit = prepare_force_points(patch,reduce=cfg.reduce_contact_points,
+                curved_budget=cfg.curved_point_budget,spacing=cfg.curved_point_spacing_m,
+                normal_angle=cfg.curved_normal_angle_rad,full_curves=_full_curves)
+            points,normals = prepared.points,prepared.normals
+            point_diagnostics.append(dict(prepared.info,patch=tag,cache_hit=cache_hit))
             if not len(points):
                 issues.add(tag+':missing_force_points')
                 continue
@@ -345,6 +375,11 @@ def check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=
     return EquilibriumResult(status, nominal, disturbances, robust, tuple(sorted(issues)), tuple(assumptions), key,
                              {'elapsed_s':perf_counter()-start, 'free_bodies':free, 'force_variables':count,
                               'force_points':len(records), 'friction_radial_inner_factor':float(np.cos(np.pi/cfg.friction_sides)),
+                              'point_preparation':point_diagnostics,
+                              'curved_sampling_used':any(d['curved_subset'] for d in point_diagnostics),
+                              'curved_fallback':False,
+                              'clean_contact_points':sum(d['clean_points'] for d in point_diagnostics),
+                              'reduce_contact_points':cfg.reduce_contact_points,
                               'characteristic_length_m':cfg.characteristic_length_m}, force_sites=sites)
 
 

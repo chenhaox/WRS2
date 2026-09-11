@@ -4,6 +4,8 @@
 
 主分支 UI 已合入，方向和静力 WRS 示例已增加接触面与显示控制，见[合并记录和用法](ui-merge-and-contact-display.zh.md)。
 
+静力追加核查：[摩擦锥、受力点与独立圆锥参考](stability-validation.zh.md)；[默认力点约简、曲面回退、floating / beam 说明与计时](force-point-reduction.zh.md)。
+
 最新更新：[Fibonacci / SOCP 方向、WRS 示例与 M2.05 静力交接](directions-and-stability.zh.md)。此前：[M1 审查与 M2.04](audit-and-m2-04.zh.md)、[Touching 判定](touching.zh.md)、[容差接触与穿入显示](tolerance-contact-and-penetration.zh.md)、[SDF 批量化](sdf-collision-and-vectorization.zh.md)。
 
 研究补充：[装配方向、Gaussian sphere 与 assemblability](assembly-directions-literature.zh.md)，含论文、旧代码与当前实现的区别，以及[交互方向球示意](assets/direction-space.html)。这是后续设计建议，不改变当前实现状态。

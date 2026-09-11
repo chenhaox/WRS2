@@ -12,7 +12,17 @@ def draw_stability(base, assembly, state, result, config):
     settings = dict(body='全部自由零件', load='nominal', points=True, cones=True, forces=True)
     panel = base.ui.add_panel('stability',title='静力平衡',anchor=Anchor.TOP_RIGHT,
                                width=330,offset=16,font_size=12,movable=True,
-                               description='黄点：实际求解点（含零力点）。蓝锥：允许施力方向。绿箭头：求得的力。')
+                               description='黄点：接触力点。青点：额外辅助支撑。蓝锥：允许施力方向。绿箭头：求得的力。')
+    cone_counts = dict(cones=0,rays=0)
+
+    def layer_status():
+        if not settings['cones']:
+            text = '摩擦锥已隐藏，可点击下方“恢复受力图层”。'
+        elif not sum(cone_counts.values()):
+            text = '所选零件没有可用力点。'
+        else:
+            text = f'显示 {cone_counts["cones"]} 个摩擦锥、{cone_counts["rays"]} 条无摩擦射线。'
+        panel.set_value('layer_status',text)
 
     def add_arrow(start, vector, rgb):
         if np.linalg.norm(vector) > 1e-10:
@@ -26,21 +36,27 @@ def draw_stability(base, assembly, state, result, config):
             group.clear()
         selected = set(free) if settings['body']=='全部自由零件' else {settings['body']}
         cone_vertices, cone_faces = [], []
-        site_count = 0
+        site_count = support_count = 0
+        cone_counts.update(cones=0,rays=0)
         for site in result.force_sites:
             targets = [(pid,sign) for pid,sign in ((site['part_a'],-1),(site['part_b'],1)) if pid in selected]
             if not targets:
                 continue
             site_count += 1
+            is_support = site['kind']=='support'
+            support_count += int(is_support)
             p = site['point_world_m']
-            objects['points'].append(wssop.icosphere(pos=p,radius=.0018,rgb=(1.,.7,.05),subdivisions=1))
+            objects['points'].append(wssop.icosphere(pos=p,radius=.0022 if is_support else .0018,
+                rgb=(0.,.75,.95) if is_support else (1.,.7,.05),subdivisions=1))
             for _,sign in targets:
                 # Fixed 25 mm axial height, not a force magnitude or capacity.
                 rim = p + .025*sign*site['rays_on_b_world']
                 if len(rim) == 1: # frictionless: cone collapses to a ray
+                    cone_counts['rays'] += 1
                     objects['cones'].append(wssop.linsegs([[p,rim[0]]],radius=.0004,
                                                           srgbs=np.array([.1,.45,1.])))
                     continue
+                cone_counts['cones'] += 1
                 start = len(cone_vertices)
                 cone_vertices.extend([p,*rim])
                 cone_faces.extend((start,start+1+i,start+1+(i+1)%len(rim)) for i in range(len(rim)))
@@ -71,7 +87,8 @@ def draw_stability(base, assembly, state, result, config):
         if result.issues:
             status = f'unknown（子模型 {status}）'
         panel.set_value('status',status + ('；没有可行反力解' if not case or case.status!='feasible' else ''))
-        panel.set_value('points_count',f'{site_count} / {len(result.force_sites)} 个接触点/辅助点')
+        panel.set_value('points_count',f'所选：{site_count-support_count} 个接触力点 + {support_count} 个辅助点')
+        layer_status()
         panel.set_value('body_info','；'.join(f'{pid}: {free[pid].mass_kg:g} kg, μ={free[pid].friction:g}' for pid in sorted(selected)))
         torques = [f'{w.part_id}: {np.round(w.torque_world_nm,3).tolist()} N·m'
                    for w in load_cases.get(settings['load'],()) if np.linalg.norm(w.torque_world_nm)>0]
@@ -84,6 +101,7 @@ def draw_stability(base, assembly, state, result, config):
         if key in objects:
             for obj in objects[key]:
                 (base.scene.add if value else base.scene.remove)(obj)
+            layer_status()
             return
         redraw()
 
@@ -94,13 +112,30 @@ def draw_stability(base, assembly, state, result, config):
     panel.add_label('status',label='当前工况')
     panel.add_label('robust',label='扰动集合',value=result.robustness_status)
     panel.add_label('points_count',label='参与计算的点')
+    clean_count = result.diagnostics.get('clean_contact_points',0)
+    contact_count = sum(site['kind']=='contact' for site in result.force_sites)
+    panel.add_label('reduction',label='整套接触力点',value=f'清理后 {clean_count} → 求解 {contact_count}；'
+                    +('约简开启' if config.reduce_contact_points else '约简关闭'))
+    auxiliary = [site for site in result.force_sites if site['kind']=='support']
+    if auxiliary:
+        panel.add_label('auxiliary',label='声明的辅助支撑',value='；'.join(
+            f'{site["support_id"]}: ≤{site["max_group_normal_force_n"]:g} N, μ={site["friction"]:g}' for site in auxiliary)
+            +'。μ=0 的锥退化为射线；不是检测到的接触面。')
+    if result.diagnostics.get('curved_fallback'):
+        panel.add_label('fallback',label='曲面采样',value='子集未通过全部工况，已回退完整曲面力点。')
     panel.add_label('body_info',label='物理参数')
     panel.add_label('torque',label='外力矩（世界 XYZ）')
     panel.add_label('residual',label='最大力残差')
-    panel.add_label('timing',label='本次静力 API',value=f'{result.diagnostics["elapsed_s"]*1000:.2f} ms，全部 {len(cases)} 工况（不含接触提取/绘图）')
+    panel.add_label('timing',label='本次建模与求解',value=f'{result.diagnostics["elapsed_s"]*1000:.2f} ms，全部 {len(cases)} 工况（不含接触提取/绘图）')
     panel.add_label('scale',label='图示比例',value='箭头 3 mm/N；蓝锥高 25 mm，仅表示方向，锥半角 atan(μ)。')
-    panel.add_label('meaning',label='解释',value='内接 16 边锥；可行力可能不唯一。选单个零件查看对应锥和反力。紫箭头为额外外力。')
+    panel.add_label('meaning',label='解释',value=f'内接 {config.friction_sides} 边锥；可行力可能不唯一。选单个零件查看对应锥和反力。紫箭头为额外外力。')
+    panel.add_label('layer_status',label='摩擦锥图层')
     for key,label in (('points','求解点'),('cones','摩擦锥'),('forces','力箭头')):
         panel.add_select(key,label=label,options=['显示','隐藏'],
                          on_change=lambda v,k=key:change(k,v=='显示'))
+    def restore_layers():
+        for key in objects:
+            panel.set_value(key,'显示')
+            change(key,True)
+    panel.add_button('restore',label='恢复受力图层',on_click=restore_layers)
     redraw()

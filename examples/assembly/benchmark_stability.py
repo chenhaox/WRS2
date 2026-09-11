@@ -45,7 +45,7 @@ def profile_stages(call, repeat):
     # These stages do not call one another, so the remainder is meaningful.
     targets = [(ContactGraph,'assert_matches','state_check'),
                (stability,'digest','input_digest'),
-               (stability,'_contact_points','contact_points'),
+               (stability,'prepare_force_points','contact_points'),
                (stability,'_generators','friction_generators'),
                (stability,'linprog','scipy_highs')]
     with ExitStack() as stack:

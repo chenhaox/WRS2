@@ -1,5 +1,6 @@
 """WRS static equilibrium: switch scenes, bodies, load cases and force overlays."""
 import argparse
+from dataclasses import replace
 from pathlib import Path
 import sys
 
@@ -9,12 +10,13 @@ from _stability_cases import DESCRIPTIONS, make_case, case_config, case_supports
 from _contact_display import contact_layers, draw_contacts
 
 
-def solve_case(name):
-    assembly,state,graph = make_case(name)
-    config = case_config(name)
+def solve_case(name,*,reduce_contact_points=True,with_supports=True,prepared=None,curved_point_budget=64):
+    assembly,state,graph = make_case(name) if prepared is None else prepared
+    config = replace(case_config(name),reduce_contact_points=reduce_contact_points,
+                     curved_point_budget=curved_point_budget)
     result = check_equilibrium(assembly,state,graph,config=config)
     print(f'{name}: without auxiliary supports = {result.status}',flush=True)
-    candidates = case_supports(name)
+    candidates = case_supports(name) if with_supports else ()
     if candidates:
         search = find_support_requirements(assembly,state,graph,candidates,config=config)
         print('Finite support requirements:',search.status,search.selected_support_ids,flush=True)
@@ -32,10 +34,15 @@ def main():
     parser.add_argument('--headless',action='store_true')
     parser.add_argument('--all',action='store_true',help='check all scenes without opening a viewer')
     parser.add_argument('--port',type=int,default=8893)
+    parser.add_argument('--reduce-contact-points',action=argparse.BooleanOptionalAction,default=True)
+    parser.add_argument('--aux-supports',action=argparse.BooleanOptionalAction,default=True,
+                        help='enable the two declared finite supports in floating')
+    parser.add_argument('--curved-point-budget',type=int,default=64)
     args = parser.parse_args()
     if args.all or args.headless:
         for name in DESCRIPTIONS if args.all else (args.case,):
-            solve_case(name)
+            solve_case(name,reduce_contact_points=args.reduce_contact_points,
+                       with_supports=args.aux_supports,curved_point_budget=args.curved_point_budget)
         return
 
     from wrs import wvw,wssop
@@ -43,10 +50,17 @@ def main():
     from _stability_display import draw_stability
     base = wvw.World(cam_pos=(.48,-.65,.45),cam_lookat_pos=(0,0,.09),port=args.port)
     loaded = False
+    prepared_cases = {}
+    settings = dict(case=args.case,reduce=args.reduce_contact_points,supports=args.aux_supports)
 
     def show_case(name):
         nonlocal loaded
-        assembly,state,graph,config,result = solve_case(name)
+        settings['case'] = name
+        if name not in prepared_cases:
+            prepared_cases[name] = make_case(name)
+        assembly,state,graph,config,result = solve_case(name,prepared=prepared_cases[name],
+            reduce_contact_points=settings['reduce'],with_supports=settings['supports'],
+            curved_point_budget=args.curved_point_budget)
         for obj in tuple(base.scene):
             base.scene.remove(obj)
         if loaded:
@@ -68,6 +82,14 @@ def main():
     panel = base.ui.add_panel('scenario',title='稳定性案例',anchor=Anchor.BOTTOM_LEFT,
                               width=250,offset=16,font_size=12)
     panel.add_select('case',label='切换案例',options=list(DESCRIPTIONS),value=args.case,on_change=show_case)
+    def change_option(key,value):
+        settings[key] = value=='开启'
+        show_case(settings['case'])
+    panel.add_select('reduce',label='约简力点',options=['开启','关闭'],
+        value='开启' if settings['reduce'] else '关闭',on_change=lambda v:change_option('reduce',v))
+    panel.add_label('clean',label='清理规则',value='重复点始终清理；关闭约简可保留其余原始力点。')
+    panel.add_select('supports',label='floating 辅助支撑',options=['开启','关闭'],
+        value='开启' if settings['supports'] else '关闭',on_change=lambda v:change_option('supports',v))
     show_case(args.case)
     base.run()
 
