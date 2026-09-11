@@ -35,3 +35,29 @@ _The world a script builds its scene in, drawn by the browser page._
 
 - **class `World`** — Same surface as the old native World, minus the window.
   - methods: `set_scene`, `set_caption`, `schedule_interval`, `schedule_once`, `stop`, `stop_after`, `event`, `dispatch`, `is_key_pressed`, `is_key_pressed_edge`, `close`, `run`
+
+## `wrs.viewer.web_ui.constant`
+_Web UI constants, following wrs.utils.constant's class/member convention._
+
+- **class `Anchor`** — Panel placement; values remain strings in the browser protocol.
+
+## `wrs.viewer.web_ui.manager`
+_Named panels, a default panel and UI event routing._
+
+- **class `UIManager`** — World.ui: a default panel plus named panels with independent controls.
+  - methods: `add_panel`, `remove_panel`
+
+## `wrs.viewer.web_ui.panel`
+_One Python-owned panel: control state, snapshots and main-loop callbacks._
+
+- **class `UIPanel`** — Define a small control panel and publish immutable state snapshots.
+  - methods: `configure`, `show`, `hide`, `add_button`, `add_slider`, `add_label`, `add_select`, `set_value`, `set_enabled`, `remove`
+
+## `wrs.viewer.web_ui.protocol`
+_UI message contract and pure validation, without sockets, DOM or callbacks._
+
+- `valid_id(value)` — Whether a panel/control/event/session ID is a nonempty bounded string.
+- `is_ui_event(payload)` — Check the event envelope; the addressed panel validates its value.
+- `finite_number(value)` — Accept real finite numbers, excluding booleans and numeric strings.
+- `slider_value(control, value)` — Validate bounds and snap to the native range input's step lattice.
+- `select_value(control, value)` — Accept only one of the dropdown's string options.
