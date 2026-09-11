@@ -3,6 +3,7 @@ import numpy as np
 from wrs.assembly import (Assembly, Part, analyze_contacts, build_contact_graph,
                           contact_constraints, fibonacci_directions)
 from wrs.assembly.primitives import box, cylinder, pose
+from _contact_display import contact_layers, draw_contacts
 
 
 def make_case(name):
@@ -22,7 +23,17 @@ def make_case(name):
             parts += (Part('bottom', cylinder(.025,.01,64), pose((0,0,-.05)), fixed=True),)
             normals = np.vstack((normals, [0,0,1]))
         assembly = Assembly(parts)
-        return assembly, assembly.initial_state(), normals
+        # Display the declared mating region independently of contact inference.
+        triangles = parts[0].geometry.vertices[parts[0].geometry.faces]
+        dz = np.ptp(triangles[:,:,2],axis=1)
+        side = triangles[dz > 0]
+        layers = [dict(name='shaft / tube',kind='declared',dimension=2,
+                       cells=list(side),points=np.empty((0,3)))]
+        if name == 'blind_shaft':
+            bottom = triangles[np.all(triangles[:,:,2] == -.045,axis=1)]
+            layers.append(dict(name='shaft / bottom',kind='declared',dimension=2,
+                               cells=list(bottom),points=np.empty((0,3))))
+        return assembly, assembly.initial_state(), normals, layers
     parts = {'plane': (floor,part), 'channel': (floor,ceiling,part),
              'corner': (floor,left,back,part),
              'blocked': (floor,ceiling,left,back,part,
@@ -32,19 +43,22 @@ def make_case(name):
         raise ValueError(f'Unknown example: {name}')
     assembly = Assembly(parts[name])
     state = assembly.initial_state()
-    graph = build_contact_graph(assembly, state, analyze_contacts(assembly, state))
+    analysis = analyze_contacts(assembly, state)
+    graph = build_contact_graph(assembly, state, analysis)
     rows = contact_constraints(graph, ['part'])
     if rows.issues:
         raise RuntimeError(f'Example contacts need review: {rows.issues}')
-    return assembly, state, rows.matrix_world[:, :3]
+    layers = contact_layers(p for p in analysis.patches if 'part' in (p.part_a,p.part_b))
+    return assembly, state, rows.matrix_world[:, :3], layers
 
 
-def draw_result(base, assembly, state, normals, result):
+def draw_result(base, assembly, state, normals, result, contacts):
     """Left: assembly; right: direction sphere. All arrows are computed results."""
     from wrs import wssop
     part_offset = np.array([-.14,0,0])
     center = np.array([.14,0,0])
     radius = .085
+    part_models = []
     for part in assembly.parts:
         color = (.36,.54,.70) if part.fixed else (.83,.69,.37)
         model = wssop.mesh(part.geometry.vertices, part.geometry.faces,
@@ -53,6 +67,9 @@ def draw_result(base, assembly, state, normals, result):
         tf[:3,3] += part_offset
         model.tf = tf
         model.add_to_scene(base.scene)
+        part_models.append(model)
+    draw_contacts(base,contacts,part_models,offset=part_offset,
+                  description='左：装配与接触面。右：方向球。蓝箭头为选中方向。')
     # Gray points only outline the sphere. They are not solver candidates.
     outline = fibonacci_directions(650)
     wssop.point_cloud(center+radius*outline, np.tile((.68,.72,.77),(len(outline),1)),

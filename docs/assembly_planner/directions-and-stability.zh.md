@@ -15,6 +15,8 @@
 
 左边显示零件和选中方向；右边是方向球。**绿点表示 Fibonacci 筛出的方向，蓝箭头表示选中方向，红箭头表示约束法线；灰点仅画球的轮廓。** SOCP 只画一个蓝箭头，没有把显示点伪装成优化候选。
 
+主分支 UI 更新后，左边也默认画出接触面；面板可切换显示并调整零件透明度。检测区域按 active/near/interference/unknown 着色，轴孔中声明的理想配合面单独用蓝色标注。[合并与绘图说明](ui-merge-and-contact-display.zh.md)
+
 `--case` 支持 `plane`（桌面）、`corner`（三面角）、`channel`（上下夹住）、`shaft`（通孔轴）、`blind_shaft`（带底轴孔）、`blocked`（六面封闭）。加 `--headless` 只计算。例：
 
 ```powershell

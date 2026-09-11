@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--headless', action='store_true')
     args = parser.parse_args()
 
-    assembly, state, normals = make_case(args.case)
+    assembly, state, normals, contacts = make_case(args.case)
     config = DirectionConfig(method='socp', preferred_direction=(0,0,1))
     result = solve_directions(normals, config=config)
     print_result(args.case, result)
@@ -24,7 +24,7 @@ def main():
     from wrs import wvw
     base = wvw.World(cam_pos=(.34,-.49,.31), cam_lookat_pos=(0,0,0), port=8892)
     base.set_caption(f'SOCP | {args.case} | blue optimal/preferred direction')
-    draw_result(base, assembly, state, normals, result)
+    draw_result(base, assembly, state, normals, result, contacts)
     base.run()
 
 

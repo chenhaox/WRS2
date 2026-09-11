@@ -15,7 +15,7 @@ def main():
     parser.add_argument('--headless', action='store_true')
     args = parser.parse_args()
 
-    assembly, state, normals = make_case(args.case)
+    assembly, state, normals, contacts = make_case(args.case)
     config = DirectionConfig(method='fibonacci', sample_count=args.samples)
     result = solve_directions(normals, config=config)
     print_result(args.case, result)
@@ -25,7 +25,7 @@ def main():
     from wrs import wvw
     base = wvw.World(cam_pos=(.34,-.49,.31), cam_lookat_pos=(0,0,0), port=8891)
     base.set_caption(f'Fibonacci | {args.case} | green samples, blue chosen direction')
-    draw_result(base, assembly, state, normals, result)
+    draw_result(base, assembly, state, normals, result, contacts)
     base.run()
 
 

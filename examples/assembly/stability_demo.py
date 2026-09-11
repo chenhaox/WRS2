@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from wrs.assembly import (Assembly, Part, SupportCandidate, analyze_contacts,
                           build_contact_graph, check_equilibrium, find_support_requirements)
 from wrs.assembly.primitives import box, pose
+from _contact_display import contact_layers, draw_contacts
 
 
 def make_case(name):
@@ -48,16 +49,21 @@ def main():
     from wrs import wvw, wssop
     base = wvw.World(cam_pos=(.42,-.58,.4), cam_lookat_pos=(0,0,.08), port=8893)
     base.set_caption(f'Static equilibrium | {args.case} | red gravity, green reaction | 0.004 m/N')
+    part_models = []
     for part in assembly.parts:
         model = wssop.mesh(part.geometry.vertices, part.geometry.faces,
                            rgb=(.55,.67,.78) if part.fixed else (.83,.69,.37), alpha=.4)
         model.tf = state.poses[part.part_id]
         model.add_to_scene(base.scene)
+        part_models.append(model)
         if not part.fixed:
             com = model.tf[:3,:3] @ part.com_local_m+model.tf[:3,3]
             gravity = part.mass_kg*assembly.gravity_world_m_s2
             wssop.arrow(com, com+.004*gravity, shaft_radius=.001,
                          head_radius=.003, head_length=.01, rgb=(.85,.2,.15)).add_to_scene(base.scene)
+    layers = contact_layers(p for edge in graph.edges for p in edge.patches)
+    draw_contacts(base,layers,part_models,
+                  description='绿色面：接触区域。红箭头：重力。绿箭头：接触力。')
     fixed_ids = {part.part_id for part in assembly.parts if part.fixed}
     for force in (*result.nominal.contact_forces, *result.nominal.support_forces):
         # Show the free body's reaction. For two free bodies, show B only.
