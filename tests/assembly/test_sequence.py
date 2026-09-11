@@ -10,6 +10,39 @@ from wrs.assembly.sequence import (plan_sequence,replay_sequence,SequenceConfig,
 
 
 class SequenceTests(unittest.TestCase):
+    def test_dfs_resumes_untried_siblings_after_a_dead_end(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from wrs.assembly.sequence import SequenceEvaluator
+        a,s,g=make_case('stack'); cfg=SequenceConfig(); oracle=SequenceEvaluator(a,cfg)
+        trace=[]
+        def evaluate(state,active,pid):
+            trace.append((tuple(sorted(state.poses)),pid))
+            if 'upper' not in state.poses and pid=='lower': return None,{'reason':'test_dead_end'}
+            after=AssemblyState({k:v for k,v in state.poses.items() if k!=pid})
+            return SimpleNamespace(after=after,supports_after=(),cost=1.,part_id=pid),None
+        with patch.object(oracle,'evaluate',side_effect=evaluate),patch('wrs.assembly.sequence.replay_sequence',return_value={'status':'valid'}):
+            p=plan_sequence(a,s,config=cfg,evaluator=oracle)
+        self.assertEqual(p.status,'success')
+        self.assertEqual([st.part_id for st in p.removal_steps],['lower','upper'])
+        self.assertEqual([pid for _,pid in trace],['upper','lower','lower','upper'])
+
+    def test_complex_gantry_and_distance_change_are_revalidated(self):
+        from _sequence_cases import make_case as complex_case
+        from wrs.assembly import MotionConfig
+        a,s,g=complex_case('gantry')
+        p=plan_sequence(a,s,config=SequenceConfig(motion=MotionConfig(outside_margin_m=.10)))
+        self.assertEqual(p.status,'success'); self.assertEqual(len(p.assembly_steps),9)
+        self.assertEqual(replay_sequence(a,p)['status'],'valid')
+        a,s,g=make_case('stack')
+        short=plan_sequence(a,s,config=SequenceConfig(motion=MotionConfig(outside_margin_m=.02)))
+        long=plan_sequence(a,s,config=SequenceConfig(motion=MotionConfig(outside_margin_m=.15)))
+        self.assertNotEqual(short.input_digest,long.input_digest)
+        for left,right in zip(short.removal_steps,long.removal_steps):
+            length=lambda step:sum(np.linalg.norm(b[:3,3]-a[:3,3]) for a,b in zip(step.removal.poses,step.removal.poses[1:]))
+            self.assertAlmostEqual(length(right)-length(left),.13,places=7)
+        self.assertEqual(replay_sequence(a,long)['status'],'valid')
+
     def test_stack_forward_replay_and_immutable_state(self):
         a,s,g=make_case('stack'); before=digest((a,s))
         plan=plan_sequence(a,s)

@@ -139,3 +139,4 @@ def draw_stability(base, assembly, state, result, config):
             change(key,True)
     panel.add_button('restore',label='恢复受力图层',on_click=restore_layers)
     redraw()
+    return panel

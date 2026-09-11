@@ -17,6 +17,11 @@ class QueryBudget:
         self.max_tests, self.used = max_tests, 0
         self.parent = parent
 
+    @property
+    def remaining(self):
+        local=self.max_tests-self.used
+        return min(local,self.parent.remaining) if self.parent is not None else local
+
     def consume(self, count=1):
         if self.used + count > self.max_tests:
             raise BudgetExceeded('Triangle-query budget exhausted')

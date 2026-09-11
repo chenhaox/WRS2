@@ -2,6 +2,8 @@
 
 2026-09-11；分支 `codex/assembly-planner`。06、07 和 08 的模拟执行基线已实现。使用 `D:\code\venv312\.venv\Scripts\python.exe`，未安装新依赖。
 
+后续增加了 M2 的真实离开距离/路径移动距离控件、九零件框架和轴套例子，优化了 DFS 及网格距离查询，并新增独立多方向 GPU 稳定性接口。见[最新用法与计时](stability-sweep-and-sequence-ui.zh.md)；[与旧版的功能差异](old-new-feature-audit.zh.md)。本页较早的性能数据保留为基线。
+
 ## 直接运行
 
 在 WRS2 根目录执行：

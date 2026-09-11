@@ -5,6 +5,7 @@ from typing import Protocol
 import numpy as np
 from ..model import checked_tf, readonly, GeometryConfig, digest
 from .mesh_bvh import MeshBVH, QueryBudget, BudgetExceeded, node_pairs, triangle_pair, aabb_distance
+from ._triangle_batch import triangle_pairs
 from .preprocess import prepare_mesh
 from .surfaces import extract_surfaces
 
@@ -119,19 +120,25 @@ class MeshProximity:
             for lower, ia, ib in node_pairs(a, b):
                 if lower >= best:
                     break
-                for i in ia:
-                    for j in ib:
-                        if aabb_distance(a.tri_lo[i],a.tri_hi[i],b.tri_lo[j],b.tri_hi[j]) >= best:
-                            continue
+                i,j=np.repeat(ia,len(ib)),np.tile(ib,len(ia))
+                bounds=np.linalg.norm(np.maximum(np.maximum(a.tri_lo[i]-b.tri_hi[j],b.tri_lo[j]-a.tri_hi[i]),0),axis=1)
+                keep=bounds<best; i,j=i[keep],j[keep]
+                if not len(i): continue
+                if len(i)>budget.remaining:
+                    # A tiny remaining budget can still finish a separated box
+                    # in one witness. Preserve scalar pruning and partial bounds.
+                    for x,y,bound in zip(i,j,bounds[keep]):
+                        if bound>=best: continue
                         budget.consume()
-                        pa, pb, _ = triangle_pair(a.triangles[i], b.triangles[j], self.tol)
-                        d = np.linalg.norm(pa - pb)
-                        if d < best:
-                            best, witness, ids = d, (pa, pb), (int(i), int(j))
-                        if best == 0:
-                            break
-                    if best == 0:
-                        break
+                        pa,pb,_=triangle_pair(a.triangles[x],b.triangles[y],self.tol)
+                        distance=np.linalg.norm(pa-pb)
+                        if distance<best: best,witness,ids=distance,(pa,pb),(int(x),int(y))
+                    continue
+                budget.consume(len(i))
+                pa,pb=triangle_pairs(a.triangles[i],b.triangles[j],self.tol)
+                distances=np.linalg.norm(pa-pb,axis=1); k=np.argmin(distances)
+                if distances[k]<best:
+                    best,witness,ids=distances[k],(pa[k],pb[k]),(int(i[k]),int(j[k]))
                 if best == 0:
                     break
         except BudgetExceeded:

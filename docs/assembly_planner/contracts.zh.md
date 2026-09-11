@@ -148,6 +148,12 @@ replay_execution(result, workcell, *, plan) -> dict
 
 ## 运动、受力和成功语义
 
+多方向极限另有 `DirectionalStabilityAnalyzer(...).analyze(directions=None, part_ids=None)` 与
+`analyze_directional_stability(...)`。返回 `wrs.assembly.stability_sweep/1`：每项
+`optimal/limit_reached/unknown`，整批 `complete/partial/unknown`；有限采样最小值不证明所有方向。
+`limit_reached` 为查询上限处的承载下界，不是无穷大；未知项使 `sampled_minimum_n=None`。
+力矩评分显式按 `torque_length_m` 换算；实际载荷仍为 N / N·m。见[接口与实现](stability-sweep-and-sequence-ui.zh.md)。
+
 运动 twist 使用 `[v_x,v_y,v_z,ω_x,ω_y,ω_z]`，同一世界坐标系，v 是指定参考点速度。为数值条件做长度归一化时保存 characteristic length，不能直接混合米与弧度距离。A 固定时对 B 的每个接触采样点使用 `n_A · (v_B + ω_B × r_B) >= 0`。
 
 稳定性中若 A 的外法线 n_A 指向 B，接触力 `f_on_B = λ*n_A + f_t`，`λ>=0`，A 受力为 `-f_on_B`。力矩关于各自 COM 计算。支撑点来自实际 active 区域，near 和孔洞不生成未知力变量。线性摩擦锥采用内接近似；误差随锥分辨率报告。

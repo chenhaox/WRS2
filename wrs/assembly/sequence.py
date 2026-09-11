@@ -225,28 +225,34 @@ def plan_sequence(assembly,initial_state=None,*,supports=(),initial_support_ids=
 
     if not _balanced(oracle.equilibrium(state,initial_support_ids)):
         return finish('unknown',(),state,'initial_equilibrium_unknown_or_failed')
-    frontier=[(state,initial_support_ids,(),0.)]; seen=set()
+    # DFS keeps untried siblings as a continuation. Do not calculate every
+    # sibling's expensive geometry/equilibrium before following the first one.
+    frontier=[(state,initial_support_ids,(),0.,None)]; seen=set()
     while frontier:
-        current,active,steps,cost=frontier.pop()
-        remaining=[k for k in current.poses if not parts[k].fixed]
+        current,active,steps,cost,pending=frontier.pop()
+        remaining=[k for k in current.poses if not parts[k].fixed] if pending is None else pending
         if not remaining:
             plan=finish('success',steps,current,'candidate_found')
             replay=replay_sequence(assembly,plan,evaluator=oracle)
             if replay['status']=='valid': return plan
             failures.append(replay); return finish('unknown',(),state,'forward_replay_failed')
-        if expanded>=cfg.max_expansions or perf_counter()-start>cfg.time_limit_s:
+        if (pending is None and expanded>=cfg.max_expansions) or perf_counter()-start>cfg.time_limit_s:
             return finish('exhausted',(),state,'search_budget_exhausted')
-        state_key=digest((current,active,tuple((i,oracle.supports[i].resource_id) for i in active)))
-        if state_key in seen: continue
-        seen.add(state_key); expanded+=1
-        remaining.sort(key=lambda k:(-current.poses[k][2,3],k))
+        if pending is None:
+            state_key=digest((current,active,tuple((i,oracle.supports[i].resource_id) for i in active)))
+            if state_key in seen: continue
+            seen.add(state_key); expanded+=1
+            remaining.sort(key=lambda k:(-current.poses[k][2,3],k))
         children=[]
-        for part_id in remaining:
+        for index,part_id in enumerate(remaining):
             if perf_counter()-start>cfg.time_limit_s: break
             step,failure=oracle.evaluate(current,active,part_id)
             if step is None: failures.append(failure); continue
-            children.append((step.after,step.supports_after,steps+(step,),cost+step.cost))
-        if cfg.method=='dfs': frontier.extend(reversed(children))
+            children.append((step.after,step.supports_after,steps+(step,),cost+step.cost,None))
+            if cfg.method=='dfs':
+                if index+1<len(remaining): frontier.append((current,active,steps,cost,remaining[index+1:]))
+                break
+        if cfg.method=='dfs': frontier.extend(children)
         else:
             frontier.extend(children)
             frontier.sort(key=lambda x:(len([k for k in x[0].poses if not parts[k].fixed]),x[3],tuple(x[0].poses)))

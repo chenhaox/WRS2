@@ -2,6 +2,8 @@
 
 2026-09-11。本轮核对代码并补充阶段基准，不修改静力求解算法。
 
+**历史阶段记录。** 后续已实现多方向极限和 CUDA 批量后端，见[新实现及计时](stability-sweep-and-sequence-ui.zh.md)；M2/M3 当前状态见[完整功能核对](old-new-feature-audit.zh.md)。下面保留当时版本的描述和数据。
+
 后续的可视化、材质同步修复、复杂场景与独立 SOCP 验证见 [稳定性可视化与计算核查](stability-validation.zh.md)。下文旧/新算法比较与原始基准保留。
 
 旧版依据 `D:/code/ch/asp/asp_old/assembly_planner` 的 Git 对象，HEAD 为 `9b886441d75f7ea79eafa4cdd5dc90d3c14dbac3`。该目录目前只有 `.git`，使用 `git show HEAD:asp/...` 读取，无须改变检出状态。`D:/code/ch/asp/assembly_planner` 是相同 commit 的已检出参考副本，下面的旧源码链接指向该副本。比较的是 `asp/utils.py` 默认 `GWS=0` 路径；其他实验分支不能混为一种实现。
