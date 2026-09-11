@@ -238,11 +238,15 @@ class MJWRSConverter:
             g.mesh_ref = self._mesh_assets[key]
         elif isinstance(c, sco.MeshCollisionShape):
             g.gtype = "mesh"
-            if c.file_path not in self._mesh_assets:
+            key = c.file_path if c.file_path else ('inline_mesh', id(c.geom))
+            if key not in self._mesh_assets:
                 name = f"mesh_{len(self._mesh_assets)}"
-                self._mesh_assets[c.file_path] = wpmno.MeshAsset(
-                    name=name, path=c.file_path)
-            g.mesh_ref = self._mesh_assets[c.file_path]
+                if c.file_path:
+                    asset = wpmno.MeshAsset(name=name, path=c.file_path)
+                else:
+                    asset = wpmno.MeshAsset(name=name, vertices=np.asarray(c.geom.vs,dtype=float).reshape(-1))
+                self._mesh_assets[key] = asset
+            g.mesh_ref = self._mesh_assets[key]
         else:
             raise NotImplementedError(f"Unsupported collision: {type(c)}")
         return g

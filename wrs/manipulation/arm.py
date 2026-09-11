@@ -75,6 +75,8 @@ class SingleArmManipulation:
     # np.pi/90`` (2 deg) -- to roughly HALVE collision checks (and RRT time) when
     # the obstacles are not paper-thin. Read by ``_context`` into the PlanningContext.
     cd_step_size = np.pi / 180
+    collision_cache_size = 10000
+    collision_cache_decimals = 3
 
     @property
     def body(self):
@@ -140,15 +142,17 @@ class SingleArmManipulation:
         constraints = tuple(constraints)
         cache = getattr(self, '_ctx_cache', None)
         if (cache is None or cache[0] is not collider
-                or cache[3] != constraints or cache[4] != self.cd_step_size):
+                or cache[3] != constraints or cache[4] != self.cd_step_size
+                or cache[5:] != (self.collision_cache_size,self.collision_cache_decimals)):
             ctx = wmppc.PlanningContext(
                 collider=collider,
                 joint_limits=self.body.chain_joint_limits(self.arm_chain),
                 constraints=constraints,
-                cd_step_size=self.cd_step_size)
+                cd_step_size=self.cd_step_size,cache_size=self.collision_cache_size,
+                cache_decimals=self.collision_cache_decimals)
             planner = wmpr.RRTConnectPlanner(pln_ctx=ctx, goal_bias=0.3)
             self._ctx_cache = (collider, ctx, planner, constraints,
-                               self.cd_step_size)
+                               self.cd_step_size,self.collision_cache_size,self.collision_cache_decimals)
         return self._ctx_cache[1], self._ctx_cache[2]
 
     # ---- grasp reasoning -----------------------------------------------------

@@ -1,6 +1,6 @@
 # 10：集成、可复现基准和使用入口
 
-状态：待实施。前置：07；机器人验收需要 08；CAD 对照需要 09。未完成的可选能力单列，不能替其打勾。
+状态：M2/M3 使用入口、分析器基准、独立进程核心依赖隔离和机器人端到端回归已实现（2026-09-11）。旧 domino/burr 数据完整迁移和 CAD 对照仍待实施。详见 [交接](../m2-m3-execution.zh.md)。
 
 ## 目标和修改范围
 
@@ -39,4 +39,4 @@
 
 ## 交接记录
 
-待填：可复制安装/运行命令、数据版本、M1/M2/M3 完成证据、基准报告、已知限制和最终基线。当前未实施。
+已交付 `plan_assembly.py` manifest 入口、`sequence_demo.py`、`robot_execution_demo.py`、`benchmark_execution.py` 和 `test_end_to_end.py`。M2/M3 命令、版本、原始基准 JSON 和未实现范围见 [交接](../m2-m3-execution.zh.md)。旧数据的物理参数尚未完成核验，未把旧结果作 golden truth，也未宣称完成 CAD 验收。

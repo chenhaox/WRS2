@@ -99,7 +99,7 @@ provenance                    # 后端版本、几何/状态摘要、source face
 
 `ContactConfig` 分别包含 numerical/contact/near/penetration 长度阈值、normal angle、最小可报告面积/长度、自适应误差目标及查询预算。验证阈值为有限非负数，near 不小于 contact。低于报告分辨率的区域单独记入 unresolved/subresolution，不能变成“已经证明不存在”。
 
-`MotionConfig` 单独包含净空要求、路径空间界限、最大平移/转动步长、验证精度、时间/节点预算和随机 seed。`StabilityConfig` 单独包含力/力矩残差、摩擦锥分辨率、扰动力集合、支撑/夹持能力。
+`MotionConfig` 单独包含净空、最大平移/转动步长、验证精度、时间/节点/候选预算及确定性 SE(3) 绕行参数。`ExecutionConfig` 另外包含 WRS 搜索 seed、关节步长和落座舍入容差。`StabilityConfig` 包含力/力矩残差、摩擦锥分辨率、扰动力集合、支撑/夹持能力。
 
 不同长度尺度的模型使用明确配置与元数据校准。所有默认数值必须由解析 fixture 标定并解释适用尺度；真实任务不能直接照搬旧 `D<1`、面积 `>30`、负 margin 或固定 `300` 路径长度。
 
@@ -107,7 +107,7 @@ provenance                    # 后端版本、几何/状态摘要、source face
 
 以下签名是模块协作目标，具体 dataclass 字段由 00 落地后成为单一真源。
 
-下面 io / preprocess / surfaces / proximity / analyze_pair / analyze_contacts、`build_contact_graph`、`contact_constraints`、`candidate_motions`、方向和静力 API 已存在；有限路径与序列层尚不存在。M2.04 的状态绑定、归一化和有限性说明见 [交接](audit-and-m2-04.zh.md)。M1 dispatcher 使用的 MeshProximity 还需要 `geometry_config`、`prepare(mesh)`、`index(mesh)`；CAD 后端不能只实现三个距离函数就假装兼容 mesh dispatcher。
+下面 API 已存在，包括有限路径、序列及机器人执行层；具体签名以代码为准。最新接口、验证级别和示例见 [M2/M3 交接](m2-m3-execution.zh.md)。M1 dispatcher 使用的 MeshProximity 还需要 `geometry_config`、`prepare(mesh)`、`index(mesh)`；CAD 后端不能只实现三个距离函数就假装兼容 mesh dispatcher。
 
 ```python
 # io / preprocess / surfaces
@@ -133,10 +133,13 @@ check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=(), 
 find_support_requirements(assembly, state, graph, candidates, *, config=None,
                           external_wrenches=(), max_supports=2, max_subsets=64) -> SupportSearchResult
 
-# 尚未实现的有限路径、序列与执行层
-plan_removal(assembly, state, action, *, graph, backend, config) -> RemovalResult
-plan_sequence(assembly, initial_state, *, evaluator, config) -> SequenceResult
-validate_execution(plan, workcell, *, config) -> ExecutionResult
+# 已实现的有限路径、序列与执行层
+plan_removal(assembly, state, action, *, graph=None, backend=None, config=None, directions=None) -> RemovalResult
+validate_object_path(assembly, state, moving_part_id, poses, *, policy=None, config=None, backend=None) -> PathValidation
+plan_sequence(assembly, initial_state=None, *, supports=(), initial_support_ids=(), config=None, evaluator=None) -> SequenceResult
+replay_sequence(assembly, plan, *, evaluator=None) -> dict
+validate_execution(plan, workcell, *, config=None) -> ExecutionResult
+replay_execution(result, workcell, *, plan) -> dict
 ```
 
 `PreparedMesh` 包含新的 geometry、原面映射、拓扑诊断、法线可靠性。`DistanceQuery` 包含对应点、距离、primitive IDs、覆盖/误差；`OverlapResult` 必须区分 separated/touching/penetrating/unknown，并覆盖完全包含而无表面相交的情况。允许后端缓存局部 BVH；姿态变化不能改变缓存内的局部顶点。
@@ -151,7 +154,7 @@ validate_execution(plan, workcell, *, config) -> ExecutionResult
 
 `EquilibriumResult`：`feasible/infeasible/unknown`、力分配、残差、扰动检验、contact mode、支撑需求和假设。优化数值失败应是 unknown，不能解释为已证明不稳定。
 
-`RemovalAction`：moving IDs、固定/夹持集合、motion primitive、支撑资源。`RemovalResult`：`success/infeasible/unknown/unsupported`、SE(3) 路径、实际验证精度、阻挡证据、状态转移。只有目标件已真正离开目标区域且路径验证达到声明级别，才算 success；试了几个方向失败不构成一般 infeasible 证明。
+`RemovalAction` 当前包含 moving IDs 和 primitive，固定障碍来自 AssemblyState，有限支撑资源由序列层管理。`RemovalResult`：`success/unknown/unsupported`、SE(3) 路径、ContactPolicy、精度、阻挡证据和输入摘要；单条路径验证额外区分 `valid/blocked/unknown`。只有目标件越过 outside 支撑边界且整段验证通过才算 success；有限搜索不输出全局 infeasible。
 
 `SequenceResult`：动作序列、状态链、几何/稳定性证据、搜索预算、失败类别。分别标记 `geometry_validated`、`equilibrium_validated`、`execution_validated`。预算耗尽是 unknown/exhausted，不能输出“无可行装配序列”的全局结论。
 

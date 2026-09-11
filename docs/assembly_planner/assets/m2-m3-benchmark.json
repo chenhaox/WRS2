@@ -1,0 +1,126 @@
+{
+  "schema_version": "wrs.assembly.execution_benchmark/1",
+  "python": "D:\\code\\venv312\\.venv\\Scripts\\python.exe",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 198 Stepping 2, GenuineIntel",
+  "packages": {
+    "numpy": "1.26.4",
+    "scipy": "1.16.2",
+    "mujoco": "3.5.0",
+    "wgpu": "0.32.0"
+  },
+  "description": "Timings include actual computation; export/viewer startup excluded. No timing pass threshold.",
+  "m2": [
+    {
+      "case": "stack",
+      "triangles": 36,
+      "fresh_evaluator_ms": [
+        128.22119999327697,
+        119.90530000184663,
+        119.22670000058133
+      ],
+      "reused_evaluator_ms": [
+        114.75419999624137,
+        10.071899989270605,
+        10.120999999344349
+      ],
+      "independent_replay_ms": [
+        108.98099999758415,
+        109.3410000030417,
+        111.72960000112653
+      ],
+      "expansions": 2
+    },
+    {
+      "case": "bridge",
+      "triangles": 60,
+      "fresh_evaluator_ms": [
+        571.3155999983428,
+        590.5670999927679,
+        587.6338000089163
+      ],
+      "reused_evaluator_ms": [
+        576.7689000058454,
+        31.04650000750553,
+        32.59089999482967
+      ],
+      "independent_replay_ms": [
+        276.02389999083243,
+        273.2035000080941,
+        288.54470000078436
+      ],
+      "expansions": 4
+    },
+    {
+      "case": "floating",
+      "triangles": 24,
+      "fresh_evaluator_ms": [
+        92.9043000069214,
+        77.04220000596251,
+        80.57460001145955
+      ],
+      "reused_evaluator_ms": [
+        77.29439999093302,
+        8.751599991228431,
+        7.491600001230836
+      ],
+      "independent_replay_ms": [
+        69.17070000781678,
+        76.54290000209585,
+        67.30649998644367
+      ],
+      "expansions": 2
+    }
+  ],
+  "m3": [
+    {
+      "auxiliary": false,
+      "total_s": 7.282646600011503,
+      "diagnostics": {
+        "reason": "forward_nominal_robot_replay_passed",
+        "elapsed_s": 7.2618923999980325,
+        "failures": [],
+        "frames_checked": 670,
+        "collision_queries": 7605,
+        "joint_step_rad": 0.015,
+        "exact_static_target_cache_hits": 6830,
+        "contact_roundoff_m": 2e-06,
+        "robot_ids": [
+          "main_arm"
+        ],
+        "assumptions": [
+          "quasistatic_declared_grasp_capacity",
+          "sampled_joint_collision_checks",
+          "WRS_rest_pose_self_collision_matrix",
+          "explicit_roundoff_only_nominal_seating",
+          "actual_pad_polygon_with_bounded_float32_projection"
+        ]
+      }
+    },
+    {
+      "auxiliary": true,
+      "total_s": 33.115093900007196,
+      "diagnostics": {
+        "reason": "forward_nominal_robot_replay_passed",
+        "elapsed_s": 33.07547949999571,
+        "failures": [],
+        "frames_checked": 1156,
+        "collision_queries": 52811,
+        "joint_step_rad": 0.015,
+        "exact_static_target_cache_hits": 51917,
+        "contact_roundoff_m": 2e-06,
+        "robot_ids": [
+          "main_arm",
+          "aux_arm"
+        ],
+        "assumptions": [
+          "quasistatic_declared_grasp_capacity",
+          "sampled_joint_collision_checks",
+          "WRS_rest_pose_self_collision_matrix",
+          "explicit_roundoff_only_nominal_seating",
+          "actual_pad_polygon_with_bounded_float32_projection"
+        ]
+      }
+    }
+  ]
+}

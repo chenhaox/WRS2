@@ -17,7 +17,8 @@ class PlanningContext:
                  joint_limits=None,         # (low, high); autoinfer from actors if None
                  constraints=(),            # extra state-validity predicates (Constraint)
                  cd_step_size=np.pi / 180,  # edge collision-check step size
-                 cache_size=10000):         # collision cache capacity
+                 cache_size=10000,          # 0 disables collision caching
+                 cache_decimals=3):         # None uses exact floating values
         if not collider.actors:
             raise ValueError("collider has no actors; set collider.actors first")
         self.collider = collider
@@ -30,7 +31,12 @@ class PlanningContext:
             joint_limits = self._infer_joint_limits()
         self.state_space = ssp.RealVectorStateSpace(*joint_limits)
         self._collision_cache = {}
+        if type(cache_size) is not int or cache_size<0:
+            raise ValueError('cache_size must be a nonnegative integer')
+        if cache_decimals is not None and (type(cache_decimals) is not int or cache_decimals<0):
+            raise ValueError('cache_decimals must be None or a nonnegative integer')
         self._cache_size = cache_size
+        self.cache_decimals = cache_decimals
 
     def _infer_joint_limits(self):
         lows, highs = [], []
@@ -86,6 +92,8 @@ class PlanningContext:
         return self.state_space.distance(state1, state2)
 
     def _is_collided(self, state):
+        if self._cache_size==0:
+            return self.collider.is_collided(state)
         key = self._state_to_key(state)
         if key in self._collision_cache:
             return self._collision_cache[key]
@@ -96,4 +104,5 @@ class PlanningContext:
         return collided
 
     def _state_to_key(self, state):
-        return tuple(np.round(state, decimals=3))
+        values=np.asarray(state,dtype=np.float64)
+        return tuple(values if self.cache_decimals is None else np.round(values,decimals=self.cache_decimals))

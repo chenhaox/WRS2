@@ -22,6 +22,24 @@ _Deterministic translation directions on a sphere or a certified subspace._
 - **class `DirectionConfig`**
 - **class `DirectionResult`**
 
+## `wrs.assembly.execution`
+_WRS nominal robot execution: grasp, reach, carry, insert, handoff and replay._
+
+- `generate_execution_grasps(part, gripper, *, max_grasps=12, seed=7, candidates=None)` — WRS Grasp records; deterministic boxes, seeded antipodal for other meshes.
+- `validate_execution(plan, workcell, *, config=None)` — Plan and independently replay a complete forward WRS assembly candidate.
+- `replay_execution(result, workcell, *, plan)` — Fresh world, no rounded joint cache: verify state chain, FK and loads.
+- **class `ExecutionConfig`**
+- **class `ExecutionArm`**
+- **class `ExecutionResult`**
+- **class `ExecutionWorkcell`** — Explicit WRS arms, real staged objects, and finite declared grasp capacity.
+  - methods: `reset`
+
+## `wrs.assembly.force_points`
+_Force-site preparation, planar hulls and deterministic curved subsets._
+
+- `prepare_force_points(patch, *, reduce=True, curved_budget=64, spacing=0.005, normal_angle=np.pi / 18, full_curves=False)`
+- **class `ForcePoints`**
+
 ## `wrs.assembly.io`
 _Versioned JSON manifests and raw STL import; no pickle/eval or unit guessing._
 
@@ -55,6 +73,20 @@ _Immutable M1 models: metres, radians, kilograms and world-frame witnesses._
 - **class `ContactAnalysis`**
   - methods: `to_dict`
 
+## `wrs.assembly.part_motion`
+_Bounded rigid-object planning with independently replayable edge certificates._
+
+- `interpolate_pose(a, b, t)`
+- `sample_path(poses, config=None)`
+- `validate_object_path(assembly, state, moving_part_id, poses, *, policy=None, config=None, backend=None)` — Certify complete intervals; uncertain small intervals stay unknown.
+- `plan_removal(assembly, state, action, *, graph=None, backend=None, config=None, directions=None)` — Single-part removal: SOCP direction, fixed axes, then bounded SE(3) detours.
+- **class `MotionConfig`**
+- **class `RemovalAction`**
+- **class `ContactPolicy`** — Scoped contact permission derived from named planar surface pairs.
+  - methods: `from_graph`, `assert_matches`
+- **class `PathValidation`**
+- **class `RemovalResult`**
+
 ## `wrs.assembly.primitives`
 _Deterministic metre-scale meshes for examples and analytical regression._
 
@@ -66,17 +98,32 @@ _Deterministic metre-scale meshes for examples and analytical regression._
 - `sphere(radius=0.025, sections=24, rings=12)` — Closed latitude mesh; exact poles allow point-contact fixtures.
 - `combine(meshes)` — Combine disjoint meshes into one, preserving winding and components.
 
+## `wrs.assembly.sequence`
+_Deterministic assembly-by-disassembly with explicit finite handling resources._
+
+- `plan_sequence(assembly, initial_state=None, *, supports=(), initial_support_ids=(), config=None, evaluator=None)`
+- `replay_sequence(assembly, plan, *, evaluator=None)` — Independently recheck forward insertion paths, state chain and load transfer.
+- **class `HandlingCapability`**
+- **class `AuxiliarySupport`**
+- **class `SequenceConfig`**
+- **class `SequenceStep`**
+  - methods: `assembly_poses`, `assembly_events`
+- **class `SequenceResult`**
+  - methods: `assembly_steps`
+- **class `SequenceEvaluator`** — Instance-owned exact-state contact/equilibrium caches, no negative global cache.
+  - methods: `graph`, `equilibrium`, `resources_valid`, `evaluate`
+
 ## `wrs.assembly.stability`
 _Static equilibrium with paired forces and an inscribed friction pyramid._
 
-- `check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=(), supports=())` — Balance every free body under gravity and declared loads.
+- `check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=(), supports=())` — Check a reduced force model, retrying all curved sites on any failed load.
 - `find_support_requirements(assembly, state, graph, candidates, *, config=None, external_wrenches=(), max_supports=2, max_subsets=64)` — Bounded enumeration; solutions are support requirements, not robot plans.
 - **class `ExternalWrench`** — World force (N) and world torque about this body's COM (N m).
 - **class `LoadCase`** — An additional simultaneous set of loads, added to gravity/base loads.
 - **class `SupportCandidate`** — A finite unilateral force at a declared point, not a validated grasp.
 - **class `StabilityConfig`**
 - **class `EquilibriumCase`**
-- **class `EquilibriumResult`**
+- **class `EquilibriumResult`** — Per-load feasibility plus the immutable force model used by the solver.
 - **class `SupportSearchResult`**
 
 ## `wrs.assembly.visualization`
@@ -92,6 +139,14 @@ _Migration of old asp JSON + STL without importing its Panda3D modules._
 - `legacy_rotation(rotation_rad)` — Reproduce loader -> CMesh.RPY -> euler_matrix(sxyz): Rz @ Ry @ Rx.
 - `legacy_asset_inventory(legacy_root, name, *, length_unit)` — Inspect all referenced assets. Missing models remain explicit entries.
 - `load_legacy_assembly(legacy_root, name, *, length_unit)` — Load legacy instances with explicit units; fail on any missing asset.
+
+## `wrs.assembly.adapters.wrs_scene`
+_Lazy WRS SceneObject bridge: full visuals and their local transforms._
+
+- `rigid_tf_from_wrs(value)` — Project float32 rotation roundoff only; reject scale/shear or bad frames.
+- `part_from_scene_object(obj, part_id, *, mass_kg=None, com_local_m=None, friction=None, fixed=False, orientation='auto')`
+- `scene_object_from_part(part, tf=None, *, collision=True, rgb=(0.7, 0.65, 0.35))`
+- `apply_state_to_scene(state, objects)` — Update instance poses only, retaining shared immutable geometry.
 
 ## `wrs.assembly.contact._penetration_regions`
 _Optional surface portions inside another solid; separate from fast queries._
