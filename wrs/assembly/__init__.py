@@ -11,10 +11,20 @@ __all__ = ['Assembly', 'AssemblyState', 'ContactAnalysis', 'ContactConfig',
            'ContactModel', 'ContactAnalyzer', 'ContactBackend', 'MeshContactBackend',
            'SDFContactBackend', 'SDFConfig', 'GridSDF', 'SignedDistanceField', 'SDFSamples', 'SDFCollisionChecker',
            'ToleranceContactPolicy', 'ContactGraph', 'build_contact_graph', 'ConstraintConfig',
-           'LocalConstraints', 'MotionCandidates', 'contact_constraints', 'candidate_motions', 'rebase_twist']
+           'LocalConstraints', 'MotionCandidates', 'contact_constraints', 'candidate_motions', 'rebase_twist',
+           'DirectionConfig', 'DirectionResult', 'fibonacci_directions', 'solve_directions', 'assembly_directions',
+           'ExternalWrench', 'LoadCase', 'SupportCandidate', 'StabilityConfig', 'EquilibriumCase',
+           'EquilibriumResult', 'SupportSearchResult', 'check_equilibrium', 'find_support_requirements']
 
 
 def __getattr__(name):
+    if name in ('ExternalWrench', 'LoadCase', 'SupportCandidate', 'StabilityConfig', 'EquilibriumCase',
+                'EquilibriumResult', 'SupportSearchResult', 'check_equilibrium', 'find_support_requirements'):
+        from . import stability
+        return getattr(stability, name)
+    if name in ('DirectionConfig', 'DirectionResult', 'fibonacci_directions', 'solve_directions', 'assembly_directions'):
+        from . import directions
+        return getattr(directions, name)
     if name in ('ContactGraph', 'build_contact_graph'):
         from .contact import graph
         return getattr(graph, name)

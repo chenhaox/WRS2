@@ -1,0 +1,370 @@
+"""Static equilibrium with paired forces and an inscribed friction pyramid.
+
+Feasibility concerns the declared rigid contact/force model. It does not prove
+dynamic stability, robot grasp feasibility or resistance to untested loads.
+"""
+from dataclasses import dataclass, field
+from itertools import combinations
+from time import perf_counter
+import numpy as np
+from scipy import sparse
+from scipy.optimize import linprog
+from .model import readonly, freeze, digest
+
+
+@dataclass(frozen=True, eq=False)
+class ExternalWrench:
+    """World force (N) and world torque about this body's COM (N m)."""
+    part_id: str
+    force_world_n: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    torque_world_nm: np.ndarray = field(default_factory=lambda: np.zeros(3))
+
+    def __post_init__(self):
+        if not isinstance(self.part_id,str) or not self.part_id:
+            raise ValueError('Wrench part_id must be a nonempty string')
+        object.__setattr__(self, 'force_world_n', readonly(self.force_world_n, shape=(3,)))
+        object.__setattr__(self, 'torque_world_nm', readonly(self.torque_world_nm, shape=(3,)))
+
+
+@dataclass(frozen=True)
+class LoadCase:
+    """An additional simultaneous set of loads, added to gravity/base loads."""
+    name: str
+    wrenches: tuple[ExternalWrench, ...]
+
+    def __post_init__(self):
+        if not isinstance(self.name,str) or not self.name or self.name == 'nominal':
+            raise ValueError('Load case needs a distinct non-nominal name')
+        object.__setattr__(self, 'wrenches', tuple(self.wrenches))
+        if not all(isinstance(w,ExternalWrench) for w in self.wrenches):
+            raise ValueError('Load case wrenches must be ExternalWrench instances')
+
+
+@dataclass(frozen=True, eq=False)
+class SupportCandidate:
+    """A finite unilateral force at a declared point, not a validated grasp.
+
+    max_normal_force_n caps the sum of generator weights. Tangential force
+    is further bounded by friction. No free moment is supplied at the point.
+    """
+    support_id: str
+    part_id: str
+    point_world_m: np.ndarray
+    normal_world: np.ndarray
+    max_normal_force_n: float
+    friction: float = 0.
+
+    def __post_init__(self):
+        if not self.support_id:
+            raise ValueError('Support ID must be nonempty')
+        object.__setattr__(self, 'point_world_m', readonly(self.point_world_m, shape=(3,)))
+        n = readonly(self.normal_world, shape=(3,))
+        size = np.linalg.norm(n)
+        if not np.isfinite(size) or size == 0:
+            raise ValueError('Support normal must be nonzero')
+        object.__setattr__(self, 'normal_world', readonly(n/size))
+        if (not np.isfinite(self.max_normal_force_n) or self.max_normal_force_n <= 0
+                or not np.isfinite(self.friction) or self.friction < 0):
+            raise ValueError('Support needs a finite positive capacity and nonnegative friction')
+
+
+@dataclass(frozen=True)
+class StabilityConfig:
+    friction_sides: int = 16
+    characteristic_length_m: float = .1
+    force_tol_n: float = 1e-6
+    torque_tol_nm: float = 1e-7
+    max_contact_normal_force_n: float | None = None
+    allow_idealized_contact: bool = False
+    solver_time_limit_s: float = 5.
+    disturbances: tuple[LoadCase, ...] = ()
+
+    def __post_init__(self):
+        if (not isinstance(self.friction_sides, int) or isinstance(self.friction_sides, bool)
+                or self.friction_sides < 4 or self.friction_sides % 2):
+            raise ValueError('friction_sides must be an even integer >= 4')
+        for name in ('characteristic_length_m', 'force_tol_n', 'torque_tol_nm', 'solver_time_limit_s'):
+            if not np.isfinite(getattr(self, name)) or getattr(self, name) <= 0:
+                raise ValueError(f'{name} must be positive and finite')
+        if self.max_contact_normal_force_n is not None and (
+                not np.isfinite(self.max_contact_normal_force_n) or self.max_contact_normal_force_n <= 0):
+            raise ValueError('Contact capacity must be positive and finite, or None')
+        cases = tuple(self.disturbances)
+        if not all(isinstance(c, LoadCase) for c in cases) or len({c.name for c in cases}) != len(cases):
+            raise ValueError('Disturbances must be LoadCases with unique names')
+        object.__setattr__(self, 'disturbances', cases)
+
+
+@dataclass(frozen=True)
+class EquilibriumCase:
+    name: str
+    status: str
+    contact_forces: tuple = ()
+    support_forces: tuple = ()
+    body_residuals: dict = field(default_factory=dict)
+    solver: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        for key in ('contact_forces', 'support_forces', 'body_residuals', 'solver'):
+            object.__setattr__(self, key, freeze(getattr(self, key)))
+
+
+@dataclass(frozen=True)
+class EquilibriumResult:
+    status: str
+    nominal: EquilibriumCase | None
+    disturbances: tuple
+    robustness_status: str
+    issues: tuple
+    assumptions: tuple
+    input_digest: str
+    diagnostics: dict = field(default_factory=dict)
+    execution_validated: bool = False
+
+    def __post_init__(self):
+        object.__setattr__(self, 'diagnostics', freeze(self.diagnostics))
+        for key in ('disturbances','issues','assumptions'):
+            object.__setattr__(self,key,tuple(getattr(self,key)))
+
+
+def _generators(normal, friction, sides):
+    n = normal/np.linalg.norm(normal)
+    if friction == 0:
+        return n[None, :]
+    axis = np.eye(3)[np.argmin(np.abs(n))]
+    tangent = np.cross(n, axis)
+    tangent /= np.linalg.norm(tangent)
+    other = np.cross(n, tangent)
+    angle = 2*np.pi*np.arange(sides)/sides
+    return n+friction*(np.cos(angle)[:, None]*tangent+np.sin(angle)[:, None]*other)
+
+
+def _contact_points(patch):
+    n = patch.normals_a_world
+    cells = [c for region in patch.regions for c in region.cells_world_m if len(c)]
+    if patch.dimension > 0 and len(n) and np.all(n == n[0]) and cells:
+        points = np.unique(np.concatenate(cells), axis=0)
+        normals = np.tile(n[0], (len(points), 1))
+    else:
+        # A common point for each action/reaction pair preserves net moment.
+        points = (patch.points_a_world_m+patch.points_b_world_m)/2
+        normals = n
+    if not len(points):
+        return points, normals
+    joined = np.unique(np.column_stack((points, normals)), axis=0)
+    return joined[:, :3], joined[:, 3:]
+
+
+def check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=(), supports=()):
+    """Balance every free body under gravity and declared loads.
+
+    Only qualified active contacts supply forces. Fixed supports are ideal
+    boundary conditions. An infeasible inner friction approximation is not a
+    proof of infeasibility of the exact Coulomb cone or all possible grasps.
+    """
+    start = perf_counter()
+    cfg = config or StabilityConfig()
+    graph.assert_matches(assembly, state)
+    parts = {p.part_id: p for p in assembly.parts if p.part_id in state.poses}
+    free = tuple(sorted(k for k,p in parts.items() if not p.fixed))
+    body_index = {k:i for i,k in enumerate(free)}
+    supports, external_wrenches = tuple(supports), tuple(external_wrenches)
+    if len({s.support_id for s in supports}) != len(supports):
+        raise ValueError('Support IDs must be unique')
+    for s in supports:
+        if s.part_id not in body_index:
+            raise ValueError('Supports must act on present free parts')
+    for w in (*external_wrenches, *(w for c in cfg.disturbances for w in c.wrenches)):
+        if not isinstance(w, ExternalWrench) or w.part_id not in body_index:
+            raise ValueError('Wrenches must act on present free parts')
+    key = digest(('equilibrium/1', graph, state,
+                  tuple((k,p.mass_kg,p.com_local_m,p.friction,p.fixed) for k,p in sorted(parts.items())),
+                  assembly.gravity_world_m_s2, cfg, external_wrenches, supports))
+    assumptions = ['rigid_nominal_contacts', 'fixed_supports_have_unlimited_reaction',
+                   f'inscribed_friction_polygon_{cfg.friction_sides}_sides',
+                   'pair_friction_is_minimum_of_declared_material_values',
+                   'uniform_contact_uses_cell_vertices; varying_normals_use_supplied_points',
+                   'infeasible_means_this_discrete_force_model_only']
+    if cfg.max_contact_normal_force_n is None:
+        assumptions.append('contact_normal_force_capacity_unbounded')
+    if supports:
+        assumptions.append('auxiliary_support_locations_and_robot_execution_unverified')
+    issues, coms = set(), {}
+    for k in free:
+        part = parts[k]
+        if part.mass_kg is None:
+            issues.add(k+':unknown_mass')
+        if part.com_local_m is None:
+            issues.add(k+':unknown_center_of_mass')
+        else:
+            tf = state.poses[k]
+            coms[k] = tf[:3,:3] @ part.com_local_m+tf[:3,3]
+    if issues:
+        return EquilibriumResult('unknown', None, (), 'unknown', tuple(sorted(issues)),
+                                 tuple(assumptions), key, {'elapsed_s':perf_counter()-start})
+
+    records, groups = [], []
+    for edge in graph.edges:
+        if not any(k in body_index for k in edge.part_ids):
+            continue
+        issues.update(f'{edge.part_ids}:{v}' for v in edge.issues)
+        for patch_index, patch in enumerate(edge.patches):
+            if patch.classification != 'active':
+                continue
+            tag = f'{edge.part_ids}:patch{patch_index}'
+            if patch.quality not in ('analytic','bounded'):
+                issues.add(tag+':unqualified_active_contact')
+                continue
+            if patch.provenance.get('idealize_contact', False):
+                if not cfg.allow_idealized_contact:
+                    issues.add(tag+':idealized_contact_disabled')
+                    continue
+                assumptions.append(tag+':explicit_zero_gap_idealization')
+            if (not len(patch.normals_a_world) or
+                    np.any(np.einsum('ij,ij->i', patch.normals_a_world, patch.normals_b_world) > -1+1e-7)):
+                issues.add(tag+':invalid_contact_normals')
+                continue
+            mus = [parts[k].friction for k in (patch.part_a, patch.part_b)]
+            if any(mu is None for mu in mus):
+                issues.add(tag+':unknown_friction')
+                continue
+            points, normals = _contact_points(patch)
+            if not len(points):
+                issues.add(tag+':missing_force_points')
+                continue
+            group = len(groups)
+            groups.append(cfg.max_contact_normal_force_n)
+            for point, normal in zip(points, normals):
+                records.append({'kind':'contact', 'part_a':patch.part_a, 'part_b':patch.part_b,
+                                'patch':tag, 'point_world_m':point, 'normal_world':normal,
+                                'friction':min(mus), 'group':group})
+    for support in supports:
+        group = len(groups)
+        groups.append(support.max_normal_force_n)
+        records.append({'kind':'support', 'part_a':None, 'part_b':support.part_id,
+                        'support_id':support.support_id, 'point_world_m':support.point_world_m,
+                        'normal_world':support.normal_world, 'friction':support.friction, 'group':group})
+
+    rows, cols, values, group_columns = [], [], [], [[] for _ in groups]
+    count = 0
+    for rec in records:
+        generators = _generators(rec['normal_world'], rec['friction'], cfg.friction_sides)
+        indices = np.arange(count, count+len(generators))
+        rec['generators'], rec['columns'] = generators, indices
+        group_columns[rec['group']].extend(indices)
+        count += len(generators)
+        for part_id, sign in ((rec['part_a'],-1), (rec['part_b'],1)):
+            if part_id not in body_index:
+                continue
+            block = sign*np.vstack((generators.T, np.cross(rec['point_world_m']-coms[part_id], generators).T))
+            rows.append(np.broadcast_to((6*body_index[part_id]+np.arange(6))[:,None], block.shape).ravel())
+            cols.append(np.broadcast_to(indices, block.shape).ravel())
+            values.append(block.ravel())
+    physical = (sparse.coo_matrix((np.concatenate(values), (np.concatenate(rows), np.concatenate(cols))),
+                                  shape=(6*len(free),count)).tocsc()
+                if values else sparse.csc_matrix((6*len(free),count)))
+    scale = np.tile(np.r_[np.ones(3), np.full(3,1/cfg.characteristic_length_m)], len(free))
+    Aeq = sparse.diags(scale) @ physical
+    limited = [(columns, limit) for columns,limit in zip(group_columns, groups) if limit is not None]
+    if limited:
+        cap_rows = np.concatenate([np.full(len(c),i) for i,(c,_) in enumerate(limited)])
+        cap_cols = np.concatenate([np.asarray(c) for c,_ in limited])
+        caps = sparse.coo_matrix((np.ones(len(cap_cols)), (cap_rows,cap_cols)),
+                                 shape=(len(limited),count)).tocsc()
+        capacities = np.array([limit for _,limit in limited])
+    else:
+        caps, capacities = None, None
+
+    def run_case(name, loads):
+        external = np.zeros((len(free),6))
+        for k in free:
+            external[body_index[k],:3] = parts[k].mass_kg*assembly.gravity_world_m_s2
+        for w in (*external_wrenches, *loads):
+            external[body_index[w.part_id],:3] += w.force_world_n
+            external[body_index[w.part_id],3:] += w.torque_world_nm
+        if not np.all(np.isfinite(external)):
+            return EquilibriumCase(name,'unknown',solver={'message':'Nonfinite scaled physical loads'})
+        if count:
+            tolerance = max(1e-10, min(cfg.force_tol_n, cfg.torque_tol_nm/cfg.characteristic_length_m)*.1)
+            result = linprog(np.ones(count), A_ub=caps, b_ub=capacities,
+                             A_eq=Aeq, b_eq=-external.ravel()*scale, bounds=(0,None), method='highs',
+                             options={'time_limit':cfg.solver_time_limit_s,
+                                      'primal_feasibility_tolerance':tolerance,
+                                      'dual_feasibility_tolerance':tolerance})
+            solver = {'status':int(result.status), 'message':str(result.message)}
+            if not result.success:
+                return EquilibriumCase(name, 'infeasible' if result.status == 2 else 'unknown', solver=solver)
+            if not np.all(np.isfinite(result.x)):
+                return EquilibriumCase(name,'unknown',solver=dict(solver,error='nonfinite_solution'))
+            weights = np.maximum(result.x, 0.)
+        else:
+            weights = np.empty(0)
+            solver = {'status':0, 'message':'No contact-force variables; check applied loads directly'}
+        residual = np.asarray(physical @ weights).reshape(-1,6)+external
+        force_error = float(np.max(np.abs(residual[:,:3]), initial=0))
+        torque_error = float(np.max(np.abs(residual[:,3:]), initial=0))
+        residuals = {k:{'force_world_n':residual[i,:3], 'torque_world_nm':residual[i,3:]} for i,k in enumerate(free)}
+        if (force_error > cfg.force_tol_n or torque_error > cfg.torque_tol_nm
+                or (caps is not None and np.any(caps @ weights > capacities+cfg.force_tol_n))):
+            return EquilibriumCase(name, 'unknown' if count else 'infeasible', body_residuals=residuals,
+                                   solver=dict(solver, residual_check_failed=True))
+        contacts, support_forces = [], []
+        for rec in records:
+            force = weights[rec['columns']] @ rec['generators']
+            entry = {'point_world_m':rec['point_world_m'], 'normal_force_n':float(np.sum(weights[rec['columns']])),
+                     'force_on_b_world_n':force, 'part_b':rec['part_b']}
+            if rec['kind'] == 'contact':
+                contacts.append(dict(entry, part_a=rec['part_a'], force_on_a_world_n=-force, patch=rec['patch']))
+            else:
+                support_forces.append(dict(entry, support_id=rec['support_id']))
+        return EquilibriumCase(name, 'feasible', tuple(contacts), tuple(support_forces), residuals, solver)
+
+    nominal = run_case('nominal', ())
+    disturbances = tuple(run_case(case.name, case.wrenches) for case in cfg.disturbances)
+    status = 'unknown' if issues else nominal.status
+    if not disturbances:
+        robust = 'not_tested'
+    elif issues or any(c.status == 'unknown' for c in (nominal,*disturbances)):
+        robust = 'unknown'
+    else:
+        robust = 'passed_tested_set' if all(c.status == 'feasible' for c in (nominal,*disturbances)) else 'failed_tested_set'
+    return EquilibriumResult(status, nominal, disturbances, robust, tuple(sorted(issues)), tuple(assumptions), key,
+                             {'elapsed_s':perf_counter()-start, 'free_bodies':free, 'force_variables':count,
+                              'force_points':len(records), 'friction_radial_inner_factor':float(np.cos(np.pi/cfg.friction_sides)),
+                              'characteristic_length_m':cfg.characteristic_length_m})
+
+
+@dataclass(frozen=True)
+class SupportSearchResult:
+    status: str
+    selected_support_ids: tuple
+    equilibrium: EquilibriumResult | None
+    tested_subsets: int
+    minimal_within_declared_candidates: bool
+    execution_validated: bool = False
+
+
+def find_support_requirements(assembly, state, graph, candidates, *, config=None,
+                              external_wrenches=(), max_supports=2, max_subsets=64):
+    """Bounded enumeration; solutions are support requirements, not robot plans."""
+    candidates = tuple(sorted(candidates, key=lambda s:s.support_id))
+    external_wrenches = tuple(external_wrenches)
+    if len({s.support_id for s in candidates}) != len(candidates):
+        raise ValueError('Support IDs must be unique')
+    if (not isinstance(max_supports,int) or max_supports < 0 or
+            not isinstance(max_subsets,int) or max_subsets < 1):
+        raise ValueError('Require nonnegative max_supports and positive max_subsets')
+    tested, unknown = 0, False
+    last = None
+    for size in range(min(max_supports,len(candidates))+1):
+        for subset in combinations(candidates,size):
+            if tested >= max_subsets:
+                return SupportSearchResult('budget_exhausted', (), last, tested, False)
+            last = check_equilibrium(assembly,state,graph,config=config,
+                                     external_wrenches=external_wrenches,supports=subset)
+            tested += 1
+            if last.status == 'feasible' and last.robustness_status in ('not_tested','passed_tested_set'):
+                return SupportSearchResult('requirements_found', tuple(s.support_id for s in subset),
+                                           last, tested, not unknown)
+            unknown |= last.status == 'unknown' or last.robustness_status == 'unknown'
+    return SupportSearchResult('unknown' if unknown else 'no_subset_within_limits', (), last, tested, False)

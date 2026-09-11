@@ -13,6 +13,15 @@ _Vectorized one-sided contact constraints and local translation/twist candidates
   - methods: `residuals`
 - **class `MotionCandidates`** — Local directions and evidence; every finite path still needs validation.
 
+## `wrs.assembly.directions`
+_Deterministic translation directions on a sphere or a certified subspace._
+
+- `fibonacci_directions(sample_count=6500)` — Immutable, repeatable (K,3) unit directions; midpoint z, golden angle.
+- `solve_directions(normals, *, config=None)` — Compute local pure-translation directions from outward constraint rows.
+- `assembly_directions(graph, moving_part_ids, *, config=None, constraint_config=None)` — ContactGraph adapter; preserve uncertain contact evidence in the result.
+- **class `DirectionConfig`**
+- **class `DirectionResult`**
+
 ## `wrs.assembly.io`
 _Versioned JSON manifests and raw STL import; no pickle/eval or unit guessing._
 
@@ -56,6 +65,19 @@ _Deterministic metre-scale meshes for examples and analytical regression._
 - `cylinder(radius=0.02, height=0.08, sections=48, *, inner_radius=0.0)` — Closed Z-axis cylinder or annular tube, centered at the origin.
 - `sphere(radius=0.025, sections=24, rings=12)` — Closed latitude mesh; exact poles allow point-contact fixtures.
 - `combine(meshes)` — Combine disjoint meshes into one, preserving winding and components.
+
+## `wrs.assembly.stability`
+_Static equilibrium with paired forces and an inscribed friction pyramid._
+
+- `check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=(), supports=())` — Balance every free body under gravity and declared loads.
+- `find_support_requirements(assembly, state, graph, candidates, *, config=None, external_wrenches=(), max_supports=2, max_subsets=64)` — Bounded enumeration; solutions are support requirements, not robot plans.
+- **class `ExternalWrench`** — World force (N) and world torque about this body's COM (N m).
+- **class `LoadCase`** — An additional simultaneous set of loads, added to gravity/base loads.
+- **class `SupportCandidate`** — A finite unilateral force at a declared point, not a validated grasp.
+- **class `StabilityConfig`**
+- **class `EquilibriumCase`**
+- **class `EquilibriumResult`**
+- **class `SupportSearchResult`**
 
 ## `wrs.assembly.visualization`
 _Evidence-only HTML previews and optional WRS scenes; no contact decisions._

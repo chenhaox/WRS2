@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>装配方向 · Gaussian sphere</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:#193146;font-family:system-ui,"Microsoft YaHei",sans-serif}main{max-width:1160px;margin:auto;padding:28px}h1{font-size:27px;margin:0 0 10px}p{line-height:1.7}header p{color:#56697a;margin:0 0 22px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px}.plot,aside{background:white;border:1px solid #dce4eb;border-radius:14px;padding:20px}canvas{width:100%;height:510px;display:block;touch-action:none;cursor:grab}canvas:active{cursor:grabbing}label{display:block;font-weight:650;margin-bottom:8px}select,button{font:inherit;border:1px solid #c1cfda;border-radius:8px;padding:10px;background:white;color:inherit}select{width:100%}button{cursor:pointer}h2{font-size:20px;margin:24px 0 8px}.equation{background:#edf3f8;padding:14px;border-radius:8px;font-family:ui-monospace,monospace;line-height:1.7}.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}.green{background:#00896b}.red{background:#d95547}.blue{background:#2466d2}.purple{background:#854dc9}.note{font-size:13px;color:#597084}#metrics{font-weight:650;color:#08755e}footer{font-size:13px;color:#637487;margin-top:20px;line-height:1.8}a{color:#2466a9}#residual{font-family:ui-monospace,monospace;font-size:13px;overflow-wrap:anywhere}@media(max-width:800px){main{padding:16px}.layout{grid-template-columns:1fr}canvas{height:370px}.plot,aside{padding:15px}}
+</style>
+<style>
+#margin-lesson{margin-top:28px;scroll-margin-top:18px}#margin-lesson h2{margin-top:0}.margin-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,.8fr);gap:24px}#margin-canvas{height:360px;cursor:default}#margin-angle{width:100%;accent-color:#2466d2;margin:14px 0}#margin-result{font-weight:650;color:#08755e}.margin-formula{font-family:ui-monospace,monospace;background:#edf3f8;border-radius:8px;padding:14px;line-height:1.8}@media(max-width:800px){.margin-layout{grid-template-columns:1fr}#margin-canvas{height:290px}}
+</style>
+<main>
+<header><h1>一个球，所有平移方向</h1><p>每个接触法线给出一个允许半球。它们的交集，就是装配终态处的一阶可行方向集合。</p></header>
+<div class="layout"><section class="plot"><p class="note"><b>教学示意：</b>有面积的绿色区域由 6,500 个固定球面点筛选显示；蓝色箭头是预设代表方向。本图未调用 WRS2 方向求解器。</p><canvas id="sphere" aria-label="可拖动旋转的方向球"></canvas><div class="legend"><span><i class="dot green"></i>允许区域（显示点阵/曲线）</span><span><i class="dot red"></i>预设约束法线</span><span><i class="dot blue"></i>预设代表方向</span><span><i class="dot purple"></i>法线均值（反例）</span></div><p class="note">点阵按固定黄金角公式生成，每次一致；圆、弧和轴向孤立点按解析约束单独绘制。拖动旋转，背面淡显；红色法线本身不一定是可行运动方向。</p><button id="reset">重置视角</button></section>
+<aside><label for="preset">理想接触情形</label><select id="preset"></select><h2 id="name"></h2><div class="equation">D = { d : N d ≥ 0, ‖d‖ = 1 }<br><span id="constraints"></span></div><p id="description"></p><p id="metrics"></p><p id="residual"></p><p class="note" id="caution"></p></aside></div>
+<section id="margin-lesson" class="plot"><h2>为什么中间方向能容许更大的偏差？</h2><p>看一个二维例子：只允许向右和向上。绿弧上的每一点是一种允许的单位方向。蓝色箭头越贴近一条边界，稍微偏转就越容易越界。</p><div class="margin-layout"><div><canvas id="margin-canvas" aria-label="允许方向及两条边界余量"></canvas><p class="note">这是方向空间，不是零件的位置。虚线长度是无量纲方向余量，不是毫米间隙。</p></div><div><label for="margin-angle">调整方向角：<output id="margin-degrees">20°</output></label><input id="margin-angle" type="range" min="0" max="90" step="1" value="20" aria-describedby="margin-result"><button id="margin-best">移到中间 45°</button><p id="margin-result" aria-live="polite"></p><div class="margin-formula">最大化 t<br>subject to（必须满足）：<br>d_x ≥ t，d_y ≥ t<br>‖d‖ ≤ 1</div><p><b>t 不能比任何一条余量大</b>，所以它被最短的那条卡住。再把 t 最大化，就会把最短余量推到最大。</p><p class="note">本例 t = min(cos θ, sin θ)，允许偏转角 = min(θ, 90°−θ)。滑块只演示解析公式，没有调用最优方向求解器。</p></div></div><p><a href="../direction-solver-explained.zh.md">LP、补充候选、耗时与轴孔降维说明</a> · <a href="../assemble-them-all-transfer.zh.md">Assemble Them All 后续迁移标注</a></p></section>
+<footer>本页是预设解析约束的教学示意，不是 WRS2 求解结果。有面积区域用点阵显示；圆、弧和孤立点单独绘制，避免被普通球面点阵漏掉。min(Nd) 是预设方向与各预设法线的点积最小值；立体角、弧长是这些理想情形的解析值，不是数点估算。这里不检查有限路径、制造公差、摩擦或机器人可达性。<br>当前候选实现：wrs/assembly/constraints.py。研究依据：<a href="https://www.cvl.iis.u-tokyo.ac.jp/~ki/papers/APO-TRA94.pdf">Ikeuchi &amp; Suehiro (1994)</a>；用户提供的 Wan et al. (2016), Fig. 6。</footer>
+</main>
+<script>
+const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0), norm=a=>Math.hypot(...a), unit=a=>a.map(x=>x/norm(a)), polar=a=>[Math.cos(a*Math.PI/180),Math.sin(a*Math.PI/180),0];
+const presets=[
+ {id:'plane',title:'平面支承',n:[[0,0,1]],d:[0,0,1],eq:'d_z ≥ 0',kind:'area',metric:'半球 · 立体角 2π sr',description:'可以向上离开，也可以沿平面滑动。赤道是保持接触的一阶切向方向。',caution:'真正插入到平面时，速度方向与从终态离开的方向相反。'},
+ {id:'channel',title:'两平行面夹持',n:[[1,0,0],[-1,0,0]],d:[0,0,1],eq:'d_x = 0',kind:'circle',metric:'一个大圆 · 弧长 2π rad · 球面面积 0',description:'左右两个约束相反，允许在 YZ 平面内移动。球面上只剩一条圆，不存在有面积的区域。',caution:'纯随机球面采样几乎不会恰好落在这个圆上。'},
+ {id:'shaft',title:'零间隙轴孔 · 无端面接触',n:[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0]],d:[0,0,1],eq:'d_x = d_y = 0',kind:'points',points:[[0,0,1],[0,0,-1]],metric:'两个孤立方向 ±z · 球面面积 0',description:'四个径向约束已足以表示纯平移限制，只能沿轴线前后移动。真实圆柱侧面的完整法线族给出同一平移集合。',caution:'有正间隙但尚未接触侧壁的轴孔，不适用这个零间隙模型。'},
+ {id:'blind',title:'零间隙轴孔 · 增加孔底',n:[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1]],d:[0,0,1],eq:'d_x = d_y = 0, d_z ≥ 0',kind:'points',points:[[0,0,1]],metric:'一个孤立方向 +z · 球面面积 0',description:'在径向限制之外，孔底阻止继续向下。局部只剩朝孔口拆出的方向。',caution:'仍须检查孔口和沿途结构；局部可拆方向不等于完整拆卸路径。'},
+ {id:'corner',title:'三个正交支承面',n:[[1,0,0],[0,1,0],[0,0,1]],d:unit([1,1,1]),eq:'d_x ≥ 0, d_y ≥ 0, d_z ≥ 0',kind:'area',metric:'八分之一球面 · 立体角 π/2 sr',description:'同时满足三个允许半球，得到一个球面三角区域。蓝色方向均衡地离开三个接触面。',caution:'这三个约束满秩，但仍然能移动。约束矩阵的秩本身不能判定是否被锁住。'},
+ {id:'cage',title:'六向完全限制',n:[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]],d:null,eq:'d_x = d_y = d_z = 0',kind:'empty',metric:'空集 · 无非零纯平移方向',description:'零向量满足不等式，但不是一个运动方向，因此不能画成球面上的点。',caution:'这只说明当前模型下没有局部纯平移方向，不能据此排除其他运动模式。'},
+ {id:'mean',title:'反例：平均法线并不可行',n:[polar(0),polar(10),polar(170)],d:polar(85),mean:unit([polar(0),polar(10),polar(170)].reduce((a,b)=>a.map((x,i)=>x+b[i]),[0,0,0])),eq:'法线在 XY 平面：0°, 10°, 170°',kind:'area',metric:'窄球面楔形 · 可行，但平均法线违反约束',description:'紫色法线均值约为 19.152°，落在允许区域之外。蓝色 85° 方向满足全部约束。',caution:'这是自行构造的数学反例。候选方向必须逐约束验证，不能把均值直接称为最佳方向。'}
+];
+const canvas=document.getElementById('sphere'), ctx=canvas.getContext('2d'), selector=document.getElementById('preset');
+for(const p of presets){const o=document.createElement('option');o.value=p.id;o.textContent=p.title;selector.append(o)}
+let current=presets[0],yaw=-.55,pitch=.48,drag=null,width=0,height=0;
+const cloud=Array.from({length:6500},(_,i)=>{const z=1-2*(i+.5)/6500,a=i*Math.PI*(3-Math.sqrt(5)),r=Math.sqrt(1-z*z);return[r*Math.cos(a),r*Math.sin(a),z]});
+function project(p){const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch),x=cy*p[0]-sy*p[1],y=sy*p[0]+cy*p[1];return[x,cp*p[2]-sp*y,cp*y+sp*p[2]]}
+function screen(p){const q=project(p),s=Math.min(width,height)*.355;return[width/2+s*q[0],height/2-s*q[1],q[2]]}
+function line(points,color,lw=1){for(let i=1;i<points.length;i++){const a=screen(points[i-1]),b=screen(points[i]);ctx.globalAlpha=(a[2]+b[2]<0)?.22:.78;ctx.strokeStyle=color;ctx.lineWidth=lw;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}ctx.globalAlpha=1}
+function arrow(v,color,label){if(!v)return;const a=screen([0,0,0]),b=screen(v);ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();const ang=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.beginPath();ctx.moveTo(b[0],b[1]);ctx.lineTo(b[0]-10*Math.cos(ang-.4),b[1]-10*Math.sin(ang-.4));ctx.lineTo(b[0]-10*Math.cos(ang+.4),b[1]-10*Math.sin(ang+.4));ctx.closePath();ctx.fill();ctx.font='13px system-ui';ctx.fillText(label,b[0]+8,b[1]-8)}
+function draw(){
+ ctx.clearRect(0,0,width,height);const r=Math.min(width,height)*.355;
+ ctx.fillStyle='#f1f5f9';ctx.beginPath();ctx.arc(width/2,height/2,r,0,2*Math.PI);ctx.fill();
+ for(let z=-.75;z<=.751;z+=.25){const rr=Math.sqrt(1-z*z);line(Array.from({length:121},(_,i)=>[rr*Math.cos(i*Math.PI/60),rr*Math.sin(i*Math.PI/60),z]),'#abbccc')}
+ for(let a=0;a<Math.PI;a+=Math.PI/6)line(Array.from({length:121},(_,i)=>[Math.cos(i*Math.PI/60)*Math.cos(a),Math.cos(i*Math.PI/60)*Math.sin(a),Math.sin(i*Math.PI/60)]),'#abbccc');
+ if(current.kind==='area'){const pts=cloud.filter(p=>current.n.every(n=>dot(n,p)>=-1e-12)).map(screen).sort((a,b)=>a[2]-b[2]);for(const p of pts){ctx.globalAlpha=p[2]<0?.18:.85;ctx.fillStyle='#00896b';ctx.beginPath();ctx.arc(p[0],p[1],1.65,0,2*Math.PI);ctx.fill()}ctx.globalAlpha=1;
+  for(const n of current.n){const base=Math.abs(n[2])<.9?[0,0,1]:[1,0,0],u=unit(base.map((x,i)=>x-n[i]*dot(base,n))),v=[n[1]*u[2]-n[2]*u[1],n[2]*u[0]-n[0]*u[2],n[0]*u[1]-n[1]*u[0]];let chunk=[];for(let i=0;i<=720;i++){const a=i*Math.PI/360,p=u.map((x,j)=>x*Math.cos(a)+v[j]*Math.sin(a));if(current.n.every(m=>dot(m,p)>=-1e-10)){chunk.push(p)}else{if(chunk.length>1)line(chunk,'#00896b',2);chunk=[]}}if(chunk.length>1)line(chunk,'#00896b',2)}
+ }
+ if(current.kind==='circle')line(Array.from({length:361},(_,i)=>[0,Math.cos(i*Math.PI/180),Math.sin(i*Math.PI/180)]),'#00896b',4);
+ for(const p of current.points||[]){const q=screen(p);ctx.strokeStyle='#00896b';ctx.lineWidth=4;ctx.beginPath();ctx.arc(q[0],q[1],9,0,2*Math.PI);ctx.stroke()}
+ current.n.forEach((n,i)=>arrow(n,'#d95547','n'+(i+1)));arrow(current.d,'#2466d2','d');arrow(current.mean,'#854dc9','均值');
+ if(current.kind==='empty'){ctx.fillStyle='#193146';ctx.font='bold 22px system-ui';ctx.fillText('D = ∅',24,35)}
+ ctx.fillStyle='#728696';ctx.font='12px system-ui';for(const [label,p] of [['x',[1.2,0,0]],['y',[0,1.2,0]],['z',[0,0,1.2]]]){const q=screen(p);ctx.fillText(label,q[0],q[1])}
+}
+function choose(){current=presets.find(p=>p.id===selector.value)||presets[0];for(const k of ['description','metrics','caution','constraints','name'])document.getElementById(k).textContent=current[{metrics:'metric',constraints:'eq',name:'title'}[k]||k];document.getElementById('residual').textContent=current.d?'蓝色方向 min(Nd) = '+Math.min(...current.n.map(n=>dot(n,current.d))).toFixed(6)+(current.mean?'；紫色均值 = '+Math.min(...current.n.map(n=>dot(n,current.mean))).toFixed(6):''): '没有可画出的非零可行方向。';draw()}
+function resize(){width=canvas.clientWidth;height=canvas.clientHeight;const ratio=window.devicePixelRatio||1;canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);ctx.setTransform(ratio,0,0,ratio,0,0);draw()}
+selector.addEventListener('change',choose);document.getElementById('reset').addEventListener('click',()=>{yaw=-.55;pitch=.48;draw()});
+canvas.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId)});canvas.addEventListener('pointermove',e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*.008;pitch=Math.max(-1.5,Math.min(1.5,pitch+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY];draw()});canvas.addEventListener('pointerup',()=>drag=null);canvas.addEventListener('pointercancel',()=>drag=null);
+window.addEventListener('resize',resize);choose();resize();
+</script>
+<script>
+(()=>{
+const chart=document.getElementById('margin-canvas'),g=chart.getContext('2d'),slider=document.getElementById('margin-angle');
+function render(){
+ const w=chart.clientWidth,h=chart.clientHeight,ratio=window.devicePixelRatio||1;chart.width=Math.round(w*ratio);chart.height=Math.round(h*ratio);g.setTransform(ratio,0,0,ratio,0,0);
+ const ox=48,oy=h-44,r=Math.min(w-95,h-92),deg=Number(slider.value),theta=deg*Math.PI/180,x=Math.cos(theta),y=Math.sin(theta),px=ox+r*x,py=oy-r*y,margin=Math.min(deg,90-deg),t=Math.min(x,y);
+ g.clearRect(0,0,w,h);g.font='13px system-ui';
+ g.fillStyle='#edf7f3';g.beginPath();g.moveTo(ox,oy);g.arc(ox,oy,r,0,-Math.PI/2,true);g.closePath();g.fill();
+ g.lineWidth=2;g.strokeStyle='#be6253';g.beginPath();g.moveTo(ox,20);g.lineTo(ox,oy);g.lineTo(w-12,oy);g.stroke();
+ g.fillStyle='#804237';g.fillText('d_x = 0',8,13);g.fillText('d_y = 0',Math.max(ox+8,w-78),h-10);
+ g.strokeStyle='#00896b';g.lineWidth=4;g.beginPath();g.arc(ox,oy,r,0,-Math.PI/2,true);g.stroke();
+ g.setLineDash([5,4]);g.lineWidth=2;g.strokeStyle='#854dc9';g.beginPath();g.moveTo(ox,py);g.lineTo(px,py);g.stroke();g.strokeStyle='#d98619';g.beginPath();g.moveTo(px,py);g.lineTo(px,oy);g.stroke();g.setLineDash([]);
+ g.strokeStyle='#2466d2';g.fillStyle='#2466d2';g.lineWidth=3;g.beginPath();g.moveTo(ox,oy);g.lineTo(px,py);g.stroke();g.beginPath();g.arc(px,py,5,0,2*Math.PI);g.fill();g.fillText(deg+'°',Math.min(w-36,px+8),Math.max(16,py-9));
+ if(margin>0){g.strokeStyle='#df9c27';g.lineWidth=5;g.beginPath();g.arc(ox,oy,38,-theta-margin*Math.PI/180,-theta+margin*Math.PI/180);g.stroke()}
+ g.fillStyle='#854dc9';g.fillText('d_x = '+x.toFixed(3),ox+10,Math.max(30,py-9));g.fillStyle='#b56a0e';g.fillText('d_y = '+y.toFixed(3),Math.min(w-92,px+10),oy-18);
+ document.getElementById('margin-degrees').textContent=deg+'°';document.getElementById('margin-result').textContent='最短余量 t = '+t.toFixed(3)+'；允许偏转 ±'+margin+'°。';
+}
+slider.addEventListener('input',render);document.getElementById('margin-best').addEventListener('click',()=>{slider.value='45';render()});window.addEventListener('resize',render);render();
+})();
+</script>
+</html>

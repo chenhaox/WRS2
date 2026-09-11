@@ -2,6 +2,8 @@
 
 状态：待实施。前置：05、06 已整合。
 
+研究标注（2026-09-11）：[Assemble Them All 迁移候选](../assemble-them-all-transfer.zh.md) 的 ATA-03 渐进预算调度、ATA-06 路径反转可作为后续对照策略；当前仍是待实施，不改变支撑验证和 unknown 语义。
+
 ## 目标和修改范围
 
 构建 assembly-by-disassembly 搜索，输出有几何路径和静力证据的装配候选；正向机器人执行仍交给 08。

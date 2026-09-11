@@ -1,12 +1,12 @@
-# 共同接口约定 v1（M1 已落地，后续规划接口仍为设计）
+# 共同接口约定 v1（M1、M2.04—05 已落地，06 以后仍为设计）
 
-本文件约束不同对话的模块边界。输入 schema 为 `wrs.assembly/1`，分析输出为 `wrs.assembly.contact/1`。M1 的实际类型以 `wrs/assembly/model.py` 和 [M1 交接](m1.zh.md) 为准。下表和包布局仍包含 04—10 的未来接口，不代表全部符号都已经存在。
+本文件约束不同对话的模块边界。输入 schema 为 `wrs.assembly/1`，分析输出为 `wrs.assembly.contact/1`。M1 的实际类型以 `wrs/assembly/model.py` 和 [M1 交接](m1.zh.md) 为准。M2.04—05 的当前方向/静力接口见[新交接](directions-and-stability.zh.md)。下表和包布局仍包含 06—10 的未来接口，不代表全部符号都已经存在。
 
 多后端扩展已落地，见 [ContactModel / ContactAnalyzer / SDF 协议](contact-backends.zh.md)。新后端实现高层 `ContactBackend`，不受下面旧 `ProximityBackend` 的 BVH 类型约束。原生数据放在 `ContactModel.representations` 中；当前 JSON v1 不序列化这些运行时字段。SDF 输出 `near_band` / `estimated`，active、点/线接触尚未求解，不能将空 active 列表理解成没有真实接触。
 
 2026-09-11 补充：独立距离证据可标记 `pair_diagnostics.active_area={status:known_zero, area_m2:0, reason:...}`；否则为 `not_solved` / null。新增 `SDFCollisionChecker`，返回独立的 `wrs.assembly.sdf_collision/1` 字典与 `separated/penetrating/unknown` 状态，不生成 ContactPatch，不做 near/法向过滤，不调用 mesh 碰撞兜底；支持 mesh-derived 字段，原生场暂显式拒绝。数据项、误差与提前退出语义见 [SDF 碰撞与批量化](sdf-collision-and-vectorization.zh.md)。
 
-M1 实际边界：`SurfacePatch.kind` 为 `plane/general`，`face_ids` 索引 PreparedMesh，原面映射在 `PreparedMesh.source_face_ids`；`Part` 当前用 `part_id` 显示名字、`fixed` 标记固定支撑、`friction` 表示摩擦；`AssemblyState` 当前只有显式 `poses` 与 `world_revision`。夹持、资源、ContactGraph、MotionConfig、StabilityConfig、规划/执行结果留给后续任务。有限开放支撑用显式 `orientation='trusted'` 的 mesh 输入。
+实际边界：`SurfacePatch.kind` 为 `plane/general`，`face_ids` 索引 PreparedMesh，原面映射在 `PreparedMesh.source_face_ids`；`Part` 当前用 `part_id` 显示名字、`fixed` 标记固定支撑、`friction` 表示摩擦；`AssemblyState` 当前只有显式 `poses` 与 `world_revision`。ContactGraph、局部方向、StabilityConfig/平衡结果与有限辅助支撑需求已实现；资源、有限路径、序列/执行留给后续任务。有限开放支撑用显式 `orientation='trusted'` 的 mesh 输入。
 
 ## 包边界
 
@@ -32,6 +32,7 @@ wrs/assembly/
     graph.py              # 零件间关系
     cad.py                # 可选 CAD 后端
   constraints.py          # 接触运动学，候选方向/twist
+  directions.py           # 已实现：Fibonacci / SOCP 纯平移方向与低维诊断
   stability.py            # 静力平衡与扰动检验
   part_motion.py          # 零件 SE(3) 路径及有限运动检查
   sequence.py             # 任务状态、动作和序列搜索
@@ -41,7 +42,7 @@ wrs/assembly/
 
 几何/contact/constraints/stability/sequence 核心不依赖 `base`、Panda3D、viewer 或 MuJoCo。通用几何原语在此验证稳定后再考虑上移到 `wrs.geom`，不要在第一步重写 WRS 其他调用者依赖的函数。
 
-核心仅使用 NumPy、SciPy、Python 标准库。CAD 等扩展按后端注册和可选依赖隔离。测试优先使用标准库 `unittest`，避免仅为测试框架扩大依赖。
+基础核心使用 NumPy、SciPy、Python 标准库；方向 SOCP 可选依赖 Clarabel（`assembly-planning` extra），惰性导入，不影响 Fibonacci、接触或静力。SDF、CAD 等扩展按后端注册和可选依赖隔离。测试优先使用标准库 `unittest`，避免仅为测试框架扩大依赖。
 
 ## 数据与单位
 
@@ -106,7 +107,7 @@ provenance                    # 后端版本、几何/状态摘要、source face
 
 以下签名是模块协作目标，具体 dataclass 字段由 00 落地后成为单一真源。
 
-下面 io / preprocess / surfaces / proximity / analyze_pair / analyze_contacts、`build_contact_graph`、`contact_constraints`、`candidate_motions` 已存在；静力、有限路径与序列层尚不存在。M2.04 的状态绑定、归一化和有限性说明见 [交接](audit-and-m2-04.zh.md)。M1 dispatcher 使用的 MeshProximity 还需要 `geometry_config`、`prepare(mesh)`、`index(mesh)`；CAD 后端不能只实现三个距离函数就假装兼容 mesh dispatcher。
+下面 io / preprocess / surfaces / proximity / analyze_pair / analyze_contacts、`build_contact_graph`、`contact_constraints`、`candidate_motions`、方向和静力 API 已存在；有限路径与序列层尚不存在。M2.04 的状态绑定、归一化和有限性说明见 [交接](audit-and-m2-04.zh.md)。M1 dispatcher 使用的 MeshProximity 还需要 `geometry_config`、`prepare(mesh)`、`index(mesh)`；CAD 后端不能只实现三个距离函数就假装兼容 mesh dispatcher。
 
 ```python
 # io / preprocess / surfaces
@@ -124,9 +125,15 @@ analyze_pair(part_a, tf_a, part_b, tf_b, *, config, backend) -> ContactAnalysis
 analyze_contacts(assembly, state, *, config, backend) -> ContactAnalysis
 build_contact_graph(assembly, state, analysis) -> ContactGraph
 
-# 后续规划层
+# 已实现的局部方向与静力层
 candidate_motions(graph, moving_part_ids, *, config) -> MotionCandidates
-check_equilibrium(assembly, state, graph, *, config) -> EquilibriumResult
+solve_directions(normals, *, config=None) -> DirectionResult
+assembly_directions(graph, moving_part_ids, *, config=None, constraint_config=None) -> DirectionResult
+check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=(), supports=()) -> EquilibriumResult
+find_support_requirements(assembly, state, graph, candidates, *, config=None,
+                          external_wrenches=(), max_supports=2, max_subsets=64) -> SupportSearchResult
+
+# 尚未实现的有限路径、序列与执行层
 plan_removal(assembly, state, action, *, graph, backend, config) -> RemovalResult
 plan_sequence(assembly, initial_state, *, evaluator, config) -> SequenceResult
 validate_execution(plan, workcell, *, config) -> ExecutionResult

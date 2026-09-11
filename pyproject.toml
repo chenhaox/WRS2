@@ -24,3 +24,4 @@ include = ['one*', 'wrs*']
 
 [project.optional-dependencies]
 assembly-sdf = ['open3d>=0.19']
+assembly-planning = ['clarabel>=0.11.1']
