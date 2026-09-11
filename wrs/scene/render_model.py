@@ -27,6 +27,7 @@ class RenderModel:
         self._rgb = wum.ensure_rgb(rgb)
         self._vrgbs = kwargs.get("vrgbs", None)
         self._alpha = alpha
+        self._material_revision = 0
         self._rotmat = wum.ensure_rotmat(rotmat)
         self._pos = wum.ensure_pos(pos)
         # cached
@@ -54,6 +55,7 @@ class RenderModel:
     @rgb.setter
     def rgb(self, rgb):
         self._rgb = wum.ensure_rgb(rgb)
+        self._material_revision += 1
 
     @property
     def alpha(self):
@@ -62,6 +64,12 @@ class RenderModel:
     @alpha.setter
     def alpha(self, alpha):
         self._alpha = alpha
+        self._material_revision += 1
+
+    @property
+    def material_revision(self):
+        """Cheap stream change detection; no geometry upload for colour edits."""
+        return self._material_revision
 
     @property
     def quat(self):

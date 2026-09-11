@@ -104,6 +104,8 @@ SOCP 是可选依赖：`pyproject.toml` 的 `assembly-planning` extra 包含 `cl
 
 ## M2.05 静力和有限支撑
 
+新增可切换的七种 WRS 场景、实际求解点与摩擦锥显示，以及独立圆锥求解对照，见 [稳定性可视化与计算核查](stability-validation.zh.md)。`stability_demo.py` 现在默认显示双墩场景；原堆叠场景用 `--case stack`。
+
 代码对照与追加实测：[当前静力、扰动和支撑与旧版的区别](stability-old-new.zh.md)，含 6/24 个载荷及辅助支撑搜索的阶段耗时。
 
 ```python

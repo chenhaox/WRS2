@@ -273,6 +273,15 @@ export class Renderer {
     const geometry = this.geometries.get(geom);
     if (!geometry) return;
     const device = this.device;
+    const existing = this.models.get(id);
+    if (existing && existing.geometry === geometry && existing.kind === kind) {
+      if (kind !== 'pcd') {
+        device.queue.writeBuffer(existing.rgbaBuf, 0, new Float32Array(rgba));
+        existing.opaque = rgba[3] >= 0.999;
+      }
+      return; // Keep the pose and GPU buffers for material-only updates.
+    }
+    if (existing) this.remove(id);
 
     if (kind === 'pcd') {
       // pcd takes its model matrix through a uniform, so it needs a bind group

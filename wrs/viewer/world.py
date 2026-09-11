@@ -252,6 +252,7 @@ class World:
         # a reconnect means the far end starts empty again.
         sent_geoms = set()
         snapshot = list(wvp.iter_scene_models(self.scene))
+        live = {mid: wvp.model_stamp(model) for mid, model, _ in snapshot}
         models, geometries = wvp.describe(
             [(model_id, model) for model_id, model, _ in snapshot], sent_geoms)
         await ws.send(wvp.scene_message(
@@ -264,7 +265,6 @@ class World:
                 'look_at': list(self.cam_lookat_pos),
                 'auto_orbit': bool(self.toggle_auto_cam_orbit),
             }))
-        live = {entry['id'] for entry in models}
         # Scene out, events in -- concurrently, so a held key does not wait on
         # the next frame and a slow frame does not swallow a keystroke.
         await asyncio.gather(self._send_scene(ws, live, sent_geoms),
@@ -296,14 +296,15 @@ class World:
             # (piled on the origin) until a frame happened to line up.
             snapshot = list(wvp.iter_scene_models(self.scene))
             current = {model_id: model for model_id, model, _ in snapshot}
-            added = [mid for mid in current if mid not in live]
+            stamps = {mid: wvp.model_stamp(model) for mid, model in current.items()}
+            changed = [mid for mid in current if live.get(mid) != stamps[mid]]
             removed = [mid for mid in live if mid not in current]
-            if added or removed:
+            if changed or removed:
                 models, geometries = wvp.describe(
-                    [(mid, current[mid]) for mid in added], sent_geoms)
+                    [(mid, current[mid]) for mid in changed], sent_geoms)
                 await ws.send(wvp.scene_message(
                     'scene_delta', models, geometries, remove=removed))
-                live = set(current)
+                live = stamps
                 prev_ids = None            # the id list moved; resend it all
             if self.caption != sent_caption:
                 sent_caption = self.caption

@@ -74,7 +74,8 @@ def draw_contacts(base, layers, part_models, *, offset=(0,0,0), description=''):
             model.alpha = value
 
     panel.add_select('show',label='接触面',options=['显示','隐藏'],value='显示',on_change=show_contacts)
-    panel.add_slider('opacity',label='零件不透明度',min_value=0,max_value=.8,step=.05,
+    panel.add_label('opacity_hint',label='透明度操作',value='0 隐藏零件，1 完全不透明；松开滑条生效')
+    panel.add_slider('opacity',label='零件不透明度',min_value=0,max_value=1,step=.05,
                       value=.2,on_change=set_opacity)
     set_opacity(.2)
     return overlays

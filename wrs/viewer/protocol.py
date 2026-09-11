@@ -150,6 +150,11 @@ def model_entry(model, model_id: str) -> Dict[str, Any]:
     return entry
 
 
+def model_stamp(model):
+    """Detect drawable replacement and material edits without copying colours."""
+    return (id(model), _geom_key(model.geom), model.material_revision)
+
+
 def geometry_entry(model) -> Tuple[Dict[str, Any], Dict[str, bytes]]:
     """That geometry's arrays, as (metadata, {field: raw bytes}).
 

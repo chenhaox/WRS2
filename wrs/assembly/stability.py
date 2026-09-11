@@ -111,6 +111,12 @@ class EquilibriumCase:
 
 @dataclass(frozen=True)
 class EquilibriumResult:
+    """Per-load feasibility plus the immutable force model used by the solver.
+
+    force_sites includes zero-force/infeasible sites. Its normal and rays act
+    on part_b; part_a receives their negatives. capacity_group identifies a
+    shared patch/support normal-force limit, not an independent per-ray cap.
+    """
     status: str
     nominal: EquilibriumCase | None
     disturbances: tuple
@@ -120,9 +126,11 @@ class EquilibriumResult:
     input_digest: str
     diagnostics: dict = field(default_factory=dict)
     execution_validated: bool = False
+    force_sites: tuple = ()
 
     def __post_init__(self):
         object.__setattr__(self, 'diagnostics', freeze(self.diagnostics))
+        object.__setattr__(self, 'force_sites', freeze(self.force_sites))
         for key in ('disturbances','issues','assumptions'):
             object.__setattr__(self,key,tuple(getattr(self,key)))
 
@@ -309,9 +317,9 @@ def check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=
             return EquilibriumCase(name, 'unknown' if count else 'infeasible', body_residuals=residuals,
                                    solver=dict(solver, residual_check_failed=True))
         contacts, support_forces = [], []
-        for rec in records:
+        for site_index, rec in enumerate(records):
             force = weights[rec['columns']] @ rec['generators']
-            entry = {'point_world_m':rec['point_world_m'], 'normal_force_n':float(np.sum(weights[rec['columns']])),
+            entry = {'site_index':site_index, 'point_world_m':rec['point_world_m'], 'normal_force_n':float(np.sum(weights[rec['columns']])),
                      'force_on_b_world_n':force, 'part_b':rec['part_b']}
             if rec['kind'] == 'contact':
                 contacts.append(dict(entry, part_a=rec['part_a'], force_on_a_world_n=-force, patch=rec['patch']))
@@ -328,10 +336,16 @@ def check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=
         robust = 'unknown'
     else:
         robust = 'passed_tested_set' if all(c.status == 'feasible' for c in (nominal,*disturbances)) else 'failed_tested_set'
+    # These are the exact sites/rays used above, even when a load is infeasible.
+    # Rays describe the force ON B; the force on A uses their negatives.
+    sites = tuple(dict(
+        {k:v for k,v in rec.items() if k not in ('columns','generators','normal_world','group')},
+        normal_on_b_world=rec['normal_world'], rays_on_b_world=rec['generators'],
+        capacity_group=rec['group'], max_group_normal_force_n=groups[rec['group']]) for rec in records)
     return EquilibriumResult(status, nominal, disturbances, robust, tuple(sorted(issues)), tuple(assumptions), key,
                              {'elapsed_s':perf_counter()-start, 'free_bodies':free, 'force_variables':count,
                               'force_points':len(records), 'friction_radial_inner_factor':float(np.cos(np.pi/cfg.friction_sides)),
-                              'characteristic_length_m':cfg.characteristic_length_m})
+                              'characteristic_length_m':cfg.characteristic_length_m}, force_sites=sites)
 
 
 @dataclass(frozen=True)
