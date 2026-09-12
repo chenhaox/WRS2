@@ -244,20 +244,26 @@ def _reduce_cone(normals, cfg):
     lookup = {row:i for i,row in enumerate(exact)}
     for index, row in enumerate(exact):
         opposite = lookup.get(tuple(-v for v in row))
-        if opposite is None or _in_span(row,echelon,pivots):
+        if opposite is None or opposite < index:
             continue
         equalities.append(row)
         certificates.append({'row':index, 'support':(opposite,), 'weights':('1',),
                              'verified':'exact_binary_float_positive_dependence'})
-        echelon, pivots = _rref(equalities)
-        if len(pivots) == 3:
-            singular = np.linalg.svd(np.asarray(equalities,dtype=float),compute_uv=False)
-            if singular[-1] <= arithmetic_tol:
-                return None, None, dict(evidence(),reason='ill_conditioned_equality_rank')
-            return np.empty((3,0)), np.empty((0,0)), evidence()
     if equalities:
-        B = _basis(echelon,pivots)
-        keep = [not _in_span(row,echelon,pivots) for row in exact]
+        echelon, pivots = _rref(equalities)
+        _, singular, vh = np.linalg.svd(np.asarray(equalities,dtype=float),full_matrices=len(equalities)<3)
+        rank = int(np.sum(singular > arithmetic_tol))
+        # Rescaling/normalizing duplicate rotated normals can introduce an
+        # extra exact binary-float rank. Do not collapse a plane to an axis
+        # because of roundoff in two otherwise identical opposite pairs.
+        if rank < len(pivots):
+            if not cfg.allow_roundoff_reduction:
+                return None, None, dict(evidence(),reason='ill_conditioned_equality_rank')
+            roundoff = True
+        B = vh[rank:].T if roundoff else _basis(echelon,pivots)
+        if not B.shape[1]: return B, np.empty((0,0)), evidence()
+        keep = (np.linalg.norm(normals @ B,axis=1) > arithmetic_tol if roundoff
+                else [not _in_span(row,echelon,pivots) for row in exact])
         projected = normals[keep] @ B
         sizes = np.linalg.norm(projected,axis=1)
         if np.any(sizes == 0) or not np.all(np.isfinite(sizes)):
@@ -293,7 +299,7 @@ def _reduce_cone(normals, cfg):
         certificates.append(certificate)
         echelon, pivots = _rref(equalities)
         if roundoff:
-            _, singular, vh = np.linalg.svd(np.asarray(equalities,dtype=float),full_matrices=True)
+            _, singular, vh = np.linalg.svd(np.asarray(equalities,dtype=float),full_matrices=len(equalities)<3)
             rank = int(np.sum(singular > arithmetic_tol))
             B = vh[rank:].T
         else:
@@ -356,6 +362,7 @@ def solve_directions(normals, *, config=None):
     N = np.unique(original/lengths[:, None], axis=0)
     preference = np.asarray(cfg.preferred_direction)
     info = {'input_rows': len(original), 'unique_rows': len(N), 'scope': 'local_translation_cone',
+            'normal_rank': int(np.linalg.matrix_rank(N, tol=128*np.finfo(float).eps)) if len(N) else 0,
             'dimension_lps': 0, 'equality_certificates': (), 'sample_count_requested': cfg.sample_count}
 
     def finish(B, points, scores=None, *, optimality='none', projected=None,
@@ -421,12 +428,13 @@ def solve_directions(normals, *, config=None):
     if B is None:
         return finish(None, [], status='unknown')
     k = B.shape[1]
+    info['cone_is_subspace'] = not len(P)
     if k == 0:
         return finish(B, [], status='blocked')
     if k == 1:
         points = np.array([[1.], [-1.]])
         ids, _ = _filter(P, points, cfg.residual_tol)
-        info.update(sample_domain='axis_endpoints', subspace_sample_count=2)
+        info.update(sample_domain='axis_endpoints', subspace_sample_count=2, feasible_axis_endpoints=len(ids))
         world = points[ids] @ B.T
         if cfg.method == 'socp' and len(world):
             world = world[[_best_index(world, None, preference)]]

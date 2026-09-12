@@ -20,10 +20,22 @@ __all__ = ['Assembly', 'AssemblyState', 'ContactAnalysis', 'ContactConfig',
            'MotionConfig', 'RemovalAction', 'ContactPolicy', 'PathValidation', 'RemovalResult', 'validate_object_path', 'plan_removal', 'sample_path',
            'HandlingCapability', 'AuxiliarySupport', 'SequenceConfig', 'SequenceStep', 'SequenceResult', 'SequenceEvaluator', 'plan_sequence', 'plan_assembly', 'replay_sequence',
            'ExecutionArm', 'ExecutionConfig', 'ExecutionWorkcell', 'ExecutionResult', 'generate_execution_grasps', 'validate_execution', 'replay_execution',
+           'AssemblabilityScore', 'StepQuality', 'score_assemblability', 'sequence_quality', 'quality_upper_bound',
+           'GraspabilityConfig', 'GraspabilityResult', 'GraspabilityAnalyzer', 'check_force_closure',
+           'QualityTransition', 'QualitySearchConfig', 'QualitySequenceResult', 'quality_depth_first', 'plan_quality_sequence',
            ]
 
 
 def __getattr__(name):
+    if name in ('AssemblabilityScore', 'StepQuality', 'score_assemblability', 'sequence_quality', 'quality_upper_bound'):
+        from . import quality
+        return getattr(quality,name)
+    if name in ('GraspabilityConfig', 'GraspabilityResult', 'GraspabilityAnalyzer', 'check_force_closure'):
+        from . import graspability
+        return getattr(graspability,name)
+    if name in ('QualityTransition', 'QualitySearchConfig', 'QualitySequenceResult', 'quality_depth_first', 'plan_quality_sequence'):
+        from . import quality_search
+        return getattr(quality_search,name)
     if name in ('StabilitySweepConfig', 'DirectionalLimit', 'StabilitySweepResult', 'DirectionalStabilityAnalyzer',
                 'disturbance_directions', 'analyze_directional_stability', 'limit_wrench'):
         from . import stability_sweep

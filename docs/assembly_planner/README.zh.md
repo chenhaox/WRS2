@@ -1,6 +1,8 @@
 # Assembly Planner 重构：implementation plan
 
-状态：**M1（00—03）与 M2（04—07）已实现；M3 的单/双臂模拟执行、独立回放与示例已实现**。2026-09-11。验证级别及范围见 [M2/M3 交接](m2-m3-execution.zh.md)。
+状态：**M1（00—03）与 M2（04—07）已实现；M3 的单/双臂模拟执行、独立回放与示例已实现**。2026-09-12。验证级别及范围见 [M2/M3 交接](m2-m3-execution.zh.md)。
+
+最新新增：[复用 WRS 抓取、独立 graspability / assemblability 评分与论文式正向质量 DFS](quality-and-paper-search.zh.md)。包含安全分支上界、实际夹爪可视化、有限支撑配重例子与当前尚缺能力；原反拆卸 DFS / beam API 保持原语义。
 
 最新审查：[真正六维采样、径向承载、任务尺度、作用反作用与 GPU 独立方程验证](wrench-stability-audit.zh.md)。默认改为 CUDA / wrench，修正旧生成器固定力/力矩比例的问题。
 

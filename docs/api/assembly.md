@@ -48,6 +48,15 @@ _Force-site preparation, planar hulls and deterministic curved subsets._
 - `prepare_force_points(patch, *, reduce=True, curved_budget=64, spacing=0.005, normal_angle=np.pi / 18, full_curves=False)`
 - **class `ForcePoints`**
 
+## `wrs.assembly.graspability`
+_Count qualified WRS grasps against the *current* assembled obstacle set._
+
+- `check_force_closure(points, normals, *, friction=0.5, cone_sides=16)` — 6D positive-span LP for unilateral hard contacts at supplied pad sites.
+- **class `GraspabilityConfig`**
+- **class `GraspabilityResult`**
+- **class `GraspabilityAnalyzer`** — Owned gripper clone, immutable catalogue snapshots and state-bound caches.
+  - methods: `accepted_grasps`, `analyze`
+
 ## `wrs.assembly.io`
 _Versioned JSON manifests and raw STL import; no pickle/eval or unit guessing._
 
@@ -105,6 +114,24 @@ _Deterministic metre-scale meshes for examples and analytical regression._
 - `cylinder(radius=0.02, height=0.08, sections=48, *, inner_radius=0.0)` — Closed Z-axis cylinder or annular tube, centered at the origin.
 - `sphere(radius=0.025, sections=24, rings=12)` — Closed latitude mesh; exact poles allow point-contact fixtures.
 - `combine(meshes)` — Combine disjoint meshes into one, preserving winding and components.
+
+## `wrs.assembly.quality`
+_Paper assembly qualities, independent of geometry, robot and search code._
+
+- `score_assemblability(directions, *, profile='asp_old')` — Score the solved cone, never the number of display/sample directions.
+- `sequence_quality(steps, *, support_penalty=100.0)` — Chen Eq.(2): min(S)min(G)min(A), or min(G)min(A)/(lambda*n).
+- `quality_upper_bound(steps, *, support_penalty=100.0, remaining_steps)` — Safe prefix bound, including a possible future first support state.
+- **class `AssemblabilityScore`**
+- **class `StepQuality`**
+
+## `wrs.assembly.quality_search`
+_Forward quality-guided DFS, with bounded supports and existing M2 replay._
+
+- `quality_depth_first(items, expand, *, initial_context=None, config=None, accept_complete=None)` — Decoupled DFS kernel; expand(context,item) yields QualityTransition(s).
+- `plan_quality_sequence(assembly, grasp_analyzer, goal_state=None, *, supports=(), config=None)` — Add parts from the fixed base; maximize Chen's score over tested orders.
+- **class `QualityTransition`**
+- **class `QualitySearchConfig`**
+- **class `QualitySequenceResult`**
 
 ## `wrs.assembly.sequence`
 _Deterministic assembly-by-disassembly with explicit finite handling resources._

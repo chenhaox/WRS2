@@ -163,15 +163,22 @@ class SequenceEvaluator:
         resources=[self.supports[i].resource_id for i in ids]
         return len(resources)==len(set(resources)) and len(resources)<=self.config.max_auxiliary_resources
 
-    def evaluate(self,state,active,part_id):
+    def evaluate(self,state,active,part_id,*,remainder_support_ids=None,directions=None):
         part=next(p for p in self.assembly.parts if p.part_id==part_id)
         handling=_handling(self.assembly,part,self.config)
         if handling is None or not handling['feasible']: return None,dict(reason='handling_capacity_or_mass_unknown',part_id=part_id)
         after=AssemblyState({k:v for k,v in state.poses.items() if k!=part_id},state.world_revision)
         candidates=sorted(i for i,s in self.supports.items() if s.candidate.part_id in after.poses)
+        if remainder_support_ids is not None:
+            remainder_support_ids=tuple(sorted(remainder_support_ids))
+            if (len(remainder_support_ids)!=len(set(remainder_support_ids))
+                    or not set(remainder_support_ids).issubset(candidates)):
+                raise ValueError('Remainder supports must be distinct and act on present parts')
         checked=0
-        for n in range(min(len(candidates),self.config.max_auxiliary_resources)+1):
-            for chosen in combinations(candidates,n):
+        sizes=(len(remainder_support_ids),) if remainder_support_ids is not None else range(min(len(candidates),self.config.max_auxiliary_resources)+1)
+        for n in sizes:
+            subsets=(remainder_support_ids,) if remainder_support_ids is not None else combinations(candidates,n)
+            for chosen in subsets:
                 checked+=1
                 if checked>self.config.max_support_subsets:
                     return None,dict(reason='support_subset_budget',part_id=part_id)
@@ -183,7 +190,8 @@ class SequenceEvaluator:
                 # equilibrium; releasing old ones happens only after takeover.
                 before=self.equilibrium(state,active)
                 if not _balanced(before): return None,dict(reason='initial_equilibrium_unknown_or_failed',part_id=part_id)
-                removal=plan_removal(self.assembly,state,part_id,graph=self.graph(state),backend=self.backend,config=self.config.motion)
+                removal=plan_removal(self.assembly,state,part_id,graph=self.graph(state),backend=self.backend,
+                                     config=self.config.motion,directions=directions)
                 if removal.status!='success': return None,dict(reason='removal_search_exhausted',part_id=part_id,details=removal.diagnostics)
                 events=[dict(kind='acquire_auxiliary',support_id=i,resource_id=self.supports[i].resource_id)
                         for i in chosen if i not in active]
