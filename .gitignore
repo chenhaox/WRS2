@@ -97,3 +97,8 @@ site/
 
 # Reproducible assembly examples write manifests, reports and previews here.
 examples/assembly/output/
+
+# Reusable paper inputs and their provenance are source assets, not reports.
+!examples/assembly/assets/paper2021/provenance.json
+!examples/assembly/assets/paper2021/scenes/*.json
+!examples/assembly/assets/paper2021/README.md

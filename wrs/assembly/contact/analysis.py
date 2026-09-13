@@ -24,7 +24,7 @@ def analyze_pair(part_a, tf_a, part_b, tf_b, *, config=None, backend=None):
     if part_a.part_id == part_b.part_id:
         raise ValueError('A pair must contain distinct instance IDs')
     ta, tb = checked_tf(tf_a), checked_tf(tf_b)
-    state_key = digest(('mesh_contact/2', part_a.geometry.geometry_id, part_b.geometry.geometry_id,
+    state_key = digest(('mesh_contact/3', part_a.geometry.geometry_id, part_b.geometry.geometry_id,
                         part_a.part_id, part_b.part_id, ta, tb, cfg, backend.geometry_config, backend.tol))
     pa, sa = backend.prepare(part_a.geometry)
     pb, sb = backend.prepare(part_b.geometry)
@@ -67,13 +67,26 @@ def analyze_pair(part_a, tf_a, part_b, tf_b, *, config=None, backend=None):
                 curved.extend({'surface_a': a.patch_id, 'surface_b': b.patch_id, **r} for r in reports)
             patches.extend(found)
     from ..model import to_dict
+    # Complete a previously unresolved touching pair only for the restricted
+    # supporting-face feature case. Never overwrite solid overlap evidence.
+    support_exhausted = False
+    before_support = plane_budget.used
+    if overlap.status == 'touching' and not patches:
+        from .support import support_face_contacts
+        for args in ((part_a,ta,pa,sa,part_b,tb,pb),(part_b,tb,pb,sb,part_a,ta,pa)):
+            found, exhausted = support_face_contacts(*args,config=cfg,budget=plane_budget)
+            patches.extend(found); support_exhausted |= exhausted
+        if support_exhausted:
+            unresolved += float(pa.areas_m2.sum()+pb.areas_m2.sum())
     diag = {**base, 'overlap': to_dict(overlap), 'surface_distance': to_dict(distance),
             'curved_coverage': curved, 'planar_coverage': planar,
             'unresolved_area_m2': unresolved + sum(r['unresolved_area_m2'] for r in curved),
             'contact_mode': 'explicit_zero_gap_idealization' if cfg.idealize_contact else 'nominal_mesh_geometry',
+            'support_feature_budget_exhausted': support_exhausted,
             'solid_assumption': 'non-self-intersecting closed manifold for inside/outside'}
     return ContactAnalysis(tuple(patches), (diag,), state_key,
                            statistics={'candidate_triangle_pairs': candidates,
+                                       'support_triangle_tests': plane_budget.used-before_support,
                                        'curved_triangle_tests': budget.used,
                                        'distance_triangle_tests': distance.triangle_tests if distance else 0,
                                        'overlap_triangle_tests': overlap.triangle_tests,
@@ -105,5 +118,5 @@ def analyze_contacts(assembly, state, *, config=None, backend=None):
         stats.append(result.statistics)
     mates = tuple(m for m in assembly.mating_relations if m.part_a in state.poses and m.part_b in state.poses)
     return ContactAnalysis(tuple(patches), tuple(diagnostics),
-                           digest(('mesh_contact/2', [(p.part_id, p.geometry.geometry_id) for p in assembly.parts], state, cfg, backend.geometry_config, backend.tol)),
+                           digest(('mesh_contact/3', [(p.part_id, p.geometry.geometry_id) for p in assembly.parts], state, cfg, backend.geometry_config, backend.tol)),
                            mates, {'pair_count': len(diagnostics), 'pairs': stats}, input_binding=binding)

@@ -4,6 +4,8 @@
 
 最新新增：[复用 WRS 抓取、独立 graspability / assemblability 评分与论文式正向质量 DFS](quality-and-paper-search.zh.md)。包含安全分支上界、实际夹爪可视化、有限支撑配重例子与当前尚缺能力；原反拆卸 DFS / beam API 保持原语义。
 
+2026-09-13 新例子：[九类实际网格方向验证、论文 20 个图号入口与 76 个装配前缀](paper-examples.zh.md)。包含 WRS 接触面/方向图库、原始与名义数据对照、缺失模型重建标注，以及点/线支撑接触和边界容差修复；177 项回归通过。
+
 最新审查：[真正六维采样、径向承载、任务尺度、作用反作用与 GPU 独立方程验证](wrench-stability-audit.zh.md)。默认改为 CUDA / wrench，修正旧生成器固定力/力矩比例的问题。
 
 此前新增：[多方向承载极限、真实 CUDA 批量求解、M2 距离 UI 与复杂例子](stability-sweep-and-sequence-ui.zh.md)。完整旧版功能核对与尚缺项目见[asp_old 对照](old-new-feature-audit.zh.md)；当前 M2/M3 基线不等于全部旧能力或实机工作流已迁移。

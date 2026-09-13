@@ -273,6 +273,11 @@ _Fast SDF collision queries with explicit, separate nominal contact geometry._
 - **class `SDFCollisionChecker`** — Query mesh collisions using bilateral signed-distance samples and bounds.
   - methods: `prepare`, `query`, `touch_regions`, `penetration_regions`
 
+## `wrs.assembly.contact.support`
+_Certified point/edge contact in the interior of a solid's supporting face._
+
+- `support_face_contacts(part_a, tf_a, prep_a, surfaces_a, part_b, tf_b, prep_b, *, config, budget)` — Return bounded zero-area features plus an exhaustion flag.
+
 ## `wrs.assembly.geometry._triangle_batch`
 _Vectorized closed-triangle distance witnesses, including edge/face crossing._
 

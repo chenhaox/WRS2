@@ -153,7 +153,10 @@ def cell_regions(cells, tol):
         d = points[vertex_ids]-points[a[edge_ids]]
         ts = np.einsum('ij,ij->i', d, delta[edge_ids])/length2[edge_ids]
         dist = np.linalg.norm(d-ts[:, None]*delta[edge_ids], axis=1)
-        mask = ((ts >= -tol/lengths_m[edge_ids]) & (ts <= 1+tol/lengths_m[edge_ids]) & (dist <= 2*tol))
+        # A vertex farther than the declared topology tolerance is a distinct
+        # boundary feature. The previous 2*tol accepted a neighboring corner
+        # as a T junction and could branch an otherwise valid polygon ring.
+        mask = ((ts >= -tol/lengths_m[edge_ids]) & (ts <= 1+tol/lengths_m[edge_ids]) & (dist <= tol))
         edge_ids, vertex_ids, ts = edge_ids[mask], vertex_ids[mask], ts[mask]
         order = np.lexsort((ts, edge_ids))
         edge_ids, vertex_ids = edge_ids[order], vertex_ids[order]

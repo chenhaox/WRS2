@@ -1,0 +1,137 @@
+{
+  "source_repository": "https://github.com/wrslab/assembly_planner",
+  "source_commit": "9b886441d75f7ea79eafa4cdd5dc90d3c14dbac3",
+  "units": "STL coordinates and scene translations interpreted as mm, declared explicitly",
+  "missing": [
+    "asp/objects/alframe.stl",
+    "asp/data/datainfo0209",
+    "asp/data/datainfo0209_2"
+  ],
+  "assets": [
+    {
+      "source": "asp/objects/bigL.stl",
+      "copy": "meshes/bigL.stl",
+      "sha256": "d9770f49eab8f3259cfebeddeb5b3bdd3e4029828545fc2c577e18d4c2bbca30"
+    },
+    {
+      "source": "asp/objects/smallL_2.stl",
+      "copy": "meshes/smallL_2.stl",
+      "sha256": "75ce9cc8f3211da22a7abad90a99aed7646227876331d940192aaf6d6c84190d"
+    },
+    {
+      "source": "asp/objects/Z.stl",
+      "copy": "meshes/Z.stl",
+      "sha256": "a605cd4b8100c9a19682f9ec8ad430d0e21543825660c9647ec09aaa96a1153b"
+    },
+    {
+      "source": "asp/objects/T.stl",
+      "copy": "meshes/T.stl",
+      "sha256": "5eeee64f1b57ab19f2534e0a4252540dd8af4665f3eb7e44135a8b767ac68cc4"
+    },
+    {
+      "source": "asp/objects/cross.stl",
+      "copy": "meshes/cross.stl",
+      "sha256": "514c256942576ede8ad281192361f38e904cdfd095b41b5ef36a882ae74ee75e"
+    },
+    {
+      "source": "asp/objects/crossleft.stl",
+      "copy": "meshes/crossleft.stl",
+      "sha256": "e355e1ba9773564da4b155bc502f183794bcb2046f71f245983a8e0d5ad49e28"
+    },
+    {
+      "source": "asp/objects/3u.stl",
+      "copy": "meshes/3u.stl",
+      "sha256": "8001b0b18f552f9e13c4d743ee26722c35c498d137276b1ad74645792404f128"
+    },
+    {
+      "source": "asp/objects/2u.stl",
+      "copy": "meshes/2u.stl",
+      "sha256": "9710c86d05ccffa7b33a2f137e06f50363a6fb371db918e07270e70d1ef332aa"
+    },
+    {
+      "source": "asp/objects/u.stl",
+      "copy": "meshes/u.stl",
+      "sha256": "14779ab5664e5374a0675cf6dbb6a5185ea0e83679c1a22fbab6b611794cbfc5"
+    },
+    {
+      "source": "asp/objects/1.stl",
+      "copy": "meshes/1.stl",
+      "sha256": "489629ee1c9662fe61333c2f7c8c35c8d003f25ea32b1b540e2a00b79acf4770"
+    },
+    {
+      "source": "asp/objects/2L_left.stl",
+      "copy": "meshes/2L_left.stl",
+      "sha256": "35d5b475f9300f720e4bcb318d40e2c995134ba38074b803603b8b178a937c46"
+    },
+    {
+      "source": "asp/objects/2L_right.stl",
+      "copy": "meshes/2L_right.stl",
+      "sha256": "5a7d5bc721a2453b9b2de6b9fd786436b447a3e0a4c3b415dd76f8876bc5f5d2"
+    },
+    {
+      "source": "asp/objects/domino.stl",
+      "copy": "meshes/domino.stl",
+      "sha256": "6cfadd2bece12abe22280ba371aba45466b8dbe45caea67d40c1792b9aedd27f"
+    },
+    {
+      "source": "asp/data/datainfo2",
+      "copy": "scenes/datainfo2.json",
+      "sha256": "3a22cfb399a60df1e74814d245196e2299a9fcd89efc3b57e98bda8532f53498"
+    },
+    {
+      "source": "asp/data/domino_5",
+      "copy": "scenes/domino_5.json",
+      "sha256": "ee582a4ba45e9a85f4cbe9a6c243ced5012dc06856823c525c2301a07a770bff"
+    },
+    {
+      "source": "asp/data/burrpuzzle",
+      "copy": "scenes/burrpuzzle.json",
+      "sha256": "8aa725afc4d4ffdea1ec991e3fc5db2d1392506f5b2d3f4a75f0da2a539ad4b1"
+    },
+    {
+      "source": "asp/data/bridge",
+      "copy": "scenes/bridge.json",
+      "sha256": "aa3f8ab95d11d41131c4872725f0fd006cfb2554ce9bb7b4c3a10ce3f19d55f3"
+    },
+    {
+      "source": "asp/data/datainfo7",
+      "copy": "scenes/datainfo7.json",
+      "sha256": "0aa5dfb5f1948cd6aec8643486bffa5b3ed823189577656dfcf819bd534c0f6d"
+    },
+    {
+      "source": "asp/data/datainfo0209_3",
+      "copy": "scenes/datainfo0209_3.json",
+      "sha256": "65eabd2e02f9ed7fd6a66803966c1b9523ecd7c29f8809ae3d3ca12236422a8b"
+    },
+    {
+      "source": "asp/data/datainfo4",
+      "copy": "scenes/datainfo4.json",
+      "sha256": "29ddc1f3deb328b9701053a7da57d008f068305d1be814dfde49c71d13f6f090"
+    },
+    {
+      "source": "asp/data/domino_7",
+      "copy": "scenes/domino_7.json",
+      "sha256": "0747985435caa371ccffbc9ae916c71c5dd873fff904743bdcafab4464284b12"
+    },
+    {
+      "source": "asp/data/domino_8",
+      "copy": "scenes/domino_8.json",
+      "sha256": "4c481ea1fe74c569ed3159143e2ccfeaf3f737ca1ed461b12e53398932d49301"
+    },
+    {
+      "source": "asp/data/domino_6",
+      "copy": "scenes/domino_6.json",
+      "sha256": "3e738867d5bddfe32576a1d218f82276da4c83c482368a6bb68bcc452f36dafe"
+    },
+    {
+      "source": "asp/data/datainfo_ss",
+      "copy": "scenes/datainfo_ss.json",
+      "sha256": "4ab8e1d6ad330e42dd202f90e7be128f223a70d8b8dc25ba8274cbb323796d23"
+    },
+    {
+      "source": "asp/data/datainfo_q",
+      "copy": "scenes/datainfo_q.json",
+      "sha256": "5feff1869fbd5ff0f10b5938df64f23ebbccae8fe5b487f3314a82697cd56625"
+    }
+  ]
+}
