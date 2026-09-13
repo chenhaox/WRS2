@@ -4,14 +4,21 @@ Feasibility concerns the declared rigid contact/force model. It does not prove
 dynamic stability, robot grasp feasibility or resistance to untested loads.
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from itertools import combinations
 from time import perf_counter
+from typing import Any
+
 import numpy as np
 from scipy import sparse
 from scipy.optimize import linprog
-from .model import readonly, freeze, digest
+
+from .contact.graph import ContactGraph
 from .force_points import prepare_force_points
+from .model import Assembly, AssemblyState, FloatArray, Part, digest, freeze, readonly
 
 
 @dataclass(frozen=True, eq=False)
@@ -22,7 +29,7 @@ class ExternalWrench:
     force_world_n: np.ndarray = field(default_factory=lambda: np.zeros(3))
     torque_world_nm: np.ndarray = field(default_factory=lambda: np.zeros(3))
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not isinstance(self.part_id, str) or not self.part_id:
             raise ValueError("Wrench part_id must be a nonempty string")
         object.__setattr__(self, "force_world_n", readonly(self.force_world_n, shape=(3,)))
@@ -36,7 +43,7 @@ class LoadCase:
     name: str
     wrenches: tuple[ExternalWrench, ...]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name or self.name == "nominal":
             raise ValueError("Load case needs a distinct non-nominal name")
         object.__setattr__(self, "wrenches", tuple(self.wrenches))
@@ -59,7 +66,7 @@ class SupportCandidate:
     max_normal_force_n: float
     friction: float = 0.0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.support_id:
             raise ValueError("Support ID must be nonempty")
         object.__setattr__(self, "point_world_m", readonly(self.point_world_m, shape=(3,)))
@@ -92,7 +99,7 @@ class StabilityConfig:
     curved_point_spacing_m: float = 0.005
     curved_normal_angle_rad: float = np.pi / 18
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not isinstance(self.reduce_contact_points, bool):
             raise ValueError("reduce_contact_points must be a bool")
         if (
@@ -144,7 +151,7 @@ class EquilibriumCase:
     body_residuals: dict = field(default_factory=dict)
     solver: dict = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         for key in ("contact_forces", "support_forces", "body_residuals", "solver"):
             object.__setattr__(self, key, freeze(getattr(self, key)))
 
@@ -160,7 +167,7 @@ class EquilibriumResult:
 
     status: str
     nominal: EquilibriumCase | None
-    disturbances: tuple
+    disturbances: tuple[EquilibriumCase, ...]
     robustness_status: str
     issues: tuple
     assumptions: tuple
@@ -169,14 +176,14 @@ class EquilibriumResult:
     execution_validated: bool = False
     force_sites: tuple = ()
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(self, "diagnostics", freeze(self.diagnostics))
         object.__setattr__(self, "force_sites", freeze(self.force_sites))
         for key in ("disturbances", "issues", "assumptions"):
             object.__setattr__(self, key, tuple(getattr(self, key)))
 
 
-def _generators(normal, friction, sides):
+def _generators(normal: FloatArray, friction: float, sides: int) -> FloatArray:
     n = normal / np.linalg.norm(normal)
     if friction == 0:
         return n[None, :]
@@ -188,13 +195,15 @@ def _generators(normal, friction, sides):
     return n + friction * (np.cos(angle)[:, None] * tangent + np.sin(angle)[:, None] * other)
 
 
-def _contact_points(patch):
-    """Cleaned full sites, retained for diagnostics and baseline benchmarks."""
-    result, _ = prepare_force_points(patch, reduce=False)
-    return result.points, result.normals
-
-
-def check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=(), supports=()):
+def check_equilibrium(
+    assembly: Assembly,
+    state: AssemblyState,
+    graph: ContactGraph,
+    *,
+    config: StabilityConfig | None = None,
+    external_wrenches: Iterable[ExternalWrench] = (),
+    supports: Iterable[SupportCandidate] = (),
+) -> EquilibriumResult:
     """Check a reduced force model, retrying all curved sites on any failed load.
 
     Planar hulls preserve the patch wrench model to arithmetic roundoff. Curved
@@ -243,9 +252,9 @@ def check_equilibrium(assembly, state, graph, *, config=None, external_wrenches=
 class _ForceSites:
     """Shared site records and one capacity per patch/support, never per ray."""
 
-    records: list
-    capacity_limits: list
-    diagnostics: list
+    records: list[dict[str, Any]]
+    capacity_limits: list[float | None]
+    diagnostics: list[dict[str, Any]]
 
 
 @dataclass
@@ -253,7 +262,7 @@ class _ForceModel:
     """Sparse equilibrium matrices; all load cases reuse this same force model."""
 
     sites: _ForceSites
-    body_index: dict
+    body_index: dict[str, int]
     physical: sparse.csc_matrix
     row_scale: np.ndarray
     balance: sparse.spmatrix
@@ -263,8 +272,16 @@ class _ForceModel:
 
 
 def _collect_force_sites(
-    graph, parts, body_index, supports, *, cfg, issues, assumptions, _full_curves
-):
+    graph: ContactGraph,
+    parts: Mapping[str, Part],
+    body_index: Mapping[str, int],
+    supports: Sequence[SupportCandidate],
+    *,
+    cfg: StabilityConfig,
+    issues: set[str],
+    assumptions: list[str],
+    _full_curves: bool,
+) -> _ForceSites:
     """Qualify active patches, record assumptions, and prepare actual force sites."""
     records, groups, point_diagnostics = [], [], []
     for edge in graph.edges:
@@ -338,7 +355,9 @@ def _collect_force_sites(
     return _ForceSites(records, groups, point_diagnostics)
 
 
-def _assemble_force_model(sites, free, coms, cfg):
+def _assemble_force_model(
+    sites: _ForceSites, free: Sequence[str], coms: Mapping[str, FloatArray], cfg: StabilityConfig
+) -> _ForceModel:
     """Build six rows per free body, with one nonnegative weight per friction ray.
 
     A contact shares the SAME columns between both bodies, with opposite signs.
@@ -404,7 +423,17 @@ def _assemble_force_model(sites, free, coms, cfg):
     )
 
 
-def _solve_load_case(name, loads, *, assembly, parts, free, model, cfg, external_wrenches):
+def _solve_load_case(
+    name: str,
+    loads: Sequence[ExternalWrench],
+    *,
+    assembly: Assembly,
+    parts: Mapping[str, Part],
+    free: Sequence[str],
+    model: _ForceModel,
+    cfg: StabilityConfig,
+    external_wrenches: Sequence[ExternalWrench],
+) -> EquilibriumCase:
     """Solve one RHS, then verify force/torque residuals in their physical units."""
     external = np.zeros((len(free), 6))
     for k in free:
@@ -491,8 +520,15 @@ def _solve_load_case(name, loads, *, assembly, parts, free, model, cfg, external
 
 
 def _check_equilibrium(
-    assembly, state, graph, *, config, external_wrenches, supports, _full_curves=False
-):
+    assembly: Assembly,
+    state: AssemblyState,
+    graph: ContactGraph,
+    *,
+    config: StabilityConfig | None,
+    external_wrenches: Iterable[ExternalWrench],
+    supports: Iterable[SupportCandidate],
+    _full_curves: bool = False,
+) -> EquilibriumResult:
     """Balance every free body under gravity and declared loads.
 
     Only qualified active contacts supply forces. Fixed supports are ideal
@@ -610,8 +646,17 @@ def _check_equilibrium(
 
 
 def _equilibrium_result(
-    *, model, nominal, disturbances, free, cfg, issues, assumptions, key, start
-):
+    *,
+    model: _ForceModel,
+    nominal: EquilibriumCase,
+    disturbances: tuple[EquilibriumCase, ...],
+    free: Sequence[str],
+    cfg: StabilityConfig,
+    issues: set[str],
+    assumptions: list[str],
+    key: str,
+    start: float,
+) -> EquilibriumResult:
     """Package physical evidence separately from preparing and solving the LP."""
     status = "unknown" if issues else nominal.status
     if not disturbances:
@@ -676,16 +721,16 @@ class SupportSearchResult:
 
 
 def find_support_requirements(
-    assembly,
-    state,
-    graph,
-    candidates,
+    assembly: Assembly,
+    state: AssemblyState,
+    graph: ContactGraph,
+    candidates: Iterable[SupportCandidate],
     *,
-    config=None,
-    external_wrenches=(),
-    max_supports=2,
-    max_subsets=64,
-):
+    config: StabilityConfig | None = None,
+    external_wrenches: Iterable[ExternalWrench] = (),
+    max_supports: int = 2,
+    max_subsets: int = 64,
+) -> SupportSearchResult:
     """Bounded enumeration; solutions are support requirements, not robot plans."""
     candidates = tuple(sorted(candidates, key=lambda s: s.support_id))
     external_wrenches = tuple(external_wrenches)

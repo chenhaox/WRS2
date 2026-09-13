@@ -6,17 +6,28 @@ This conservative decomposition supplies a whole-transfer equilibrium witness.
 Staging/grasp feasibility remains an explicit obligation for robot execution.
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from itertools import combinations
 from time import perf_counter
-from typing import NamedTuple
+from typing import Any, NamedTuple
+
 import numpy as np
-from .model import AssemblyState, freeze, digest
+from numpy.typing import ArrayLike
+
 from .contact.analysis import analyze_contacts
-from .contact.graph import build_contact_graph
+from .contact.graph import ContactGraph, build_contact_graph
 from .geometry.proximity import MeshProximity
-from .part_motion import MotionConfig, plan_removal, validate_object_path
-from .stability import StabilityConfig, SupportCandidate, check_equilibrium
+from .model import Assembly, AssemblyState, FloatArray, Part, digest, freeze
+from .part_motion import MotionConfig, RemovalResult, plan_removal, validate_object_path
+from .stability import (
+    EquilibriumResult,
+    StabilityConfig,
+    SupportCandidate,
+    check_equilibrium,
+)
 
 
 @dataclass(frozen=True)
@@ -25,7 +36,7 @@ class HandlingCapability:
     max_force_n: float = 100.0
     max_torque_nm: float = 10.0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.resource_id:
             raise ValueError("Handling resource ID required")
         for k in ("max_force_n", "max_torque_nm"):
@@ -38,7 +49,7 @@ class AuxiliarySupport:
     resource_id: str
     candidate: SupportCandidate
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.resource_id or not isinstance(self.candidate, SupportCandidate):
             raise ValueError("A named resource and a finite SupportCandidate are required")
 
@@ -55,7 +66,7 @@ class SequenceConfig:
     stability: StabilityConfig = field(default_factory=StabilityConfig)
     handling: HandlingCapability = field(default_factory=HandlingCapability)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.method not in ("dfs", "beam"):
             raise ValueError("method must be dfs or beam")
         for k in ("max_expansions", "beam_width", "max_support_subsets"):
@@ -77,43 +88,43 @@ class SequenceStep:
     part_id: str
     before: AssemblyState
     after: AssemblyState
-    removal: object
+    removal: RemovalResult
     supports_before: tuple[str, ...]
     supports_after: tuple[str, ...]
-    events: tuple
-    evidence: dict
+    events: tuple[Mapping[str, Any], ...]
+    evidence: Mapping[str, Any]
     cost: float
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         for k in ("events", "evidence"):
             object.__setattr__(self, k, freeze(getattr(self, k)))
         for k in ("supports_before", "supports_after"):
             object.__setattr__(self, k, tuple(getattr(self, k)))
 
     @property
-    def assembly_before(self):
+    def assembly_before(self) -> AssemblyState:
         """Installed remainder before insertion (the carried part is omitted)."""
         return self.after
 
     @property
-    def assembly_after(self):
+    def assembly_after(self) -> AssemblyState:
         """Installed assembly after insertion."""
         return self.before
 
     @property
-    def assembly_supports_before(self):
+    def assembly_supports_before(self) -> tuple[str, ...]:
         return self.supports_after
 
     @property
-    def assembly_supports_after(self):
+    def assembly_supports_after(self) -> tuple[str, ...]:
         return self.supports_before
 
     @property
-    def assembly_poses(self):
+    def assembly_poses(self) -> tuple[FloatArray, ...]:
         return tuple(reversed(self.removal.poses))
 
     @property
-    def assembly_events(self):
+    def assembly_events(self) -> tuple[Mapping[str, Any], ...]:
         inverse = {
             "acquire_auxiliary": "release_auxiliary",
             "release_auxiliary": "acquire_auxiliary",
@@ -127,30 +138,30 @@ class SequenceStep:
 @dataclass(frozen=True, eq=False)
 class SequenceResult:
     status: str
-    removal_steps: tuple
+    removal_steps: tuple[SequenceStep, ...]
     initial_state: AssemblyState
     terminal_state: AssemblyState
     supports: tuple[AuxiliarySupport, ...]
-    initial_support_ids: tuple
+    initial_support_ids: tuple[str, ...]
     config: SequenceConfig
     input_digest: str
-    diagnostics: dict
+    diagnostics: Mapping[str, Any]
     geometry_validated: bool = False
     equilibrium_validated: bool = False
     execution_validated: bool = False
     schema_version: str = "wrs.assembly.sequence/1"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         for k in ("removal_steps", "supports", "initial_support_ids"):
             object.__setattr__(self, k, tuple(getattr(self, k)))
         object.__setattr__(self, "diagnostics", freeze(self.diagnostics))
 
     @property
-    def assembly_steps(self):
+    def assembly_steps(self) -> tuple[SequenceStep, ...]:
         return tuple(reversed(self.removal_steps))
 
 
-def _restricted_config(config, state):
+def _restricted_config(config: StabilityConfig, state: AssemblyState) -> StabilityConfig:
     return replace(
         config,
         disturbances=tuple(
@@ -160,14 +171,14 @@ def _restricted_config(config, state):
     )
 
 
-def _balanced(result):
+def _balanced(result: EquilibriumResult) -> bool:
     return result.status == "feasible" and result.robustness_status in (
         "not_tested",
         "passed_tested_set",
     )
 
 
-def _handling(assembly, part, config):
+def _handling(assembly: Assembly, part: Part, config: SequenceConfig) -> dict[str, Any] | None:
     if part.mass_kg is None or part.com_local_m is None:
         return None
     gravity = part.mass_kg * assembly.gravity_world_m_s2
@@ -194,15 +205,17 @@ class SequenceEvaluator:
     the carried part and the remaining assembly must balance independently.
     """
 
-    def __init__(self, assembly, config, supports=()):
+    def __init__(
+        self, assembly: Assembly, config: SequenceConfig, supports: Iterable[AuxiliarySupport] = ()
+    ) -> None:
         self.assembly = assembly
         self.config = config
         self.supports = {support.candidate.support_id: support for support in supports}
         self.backend = MeshProximity(numerical_tol_m=config.motion.numerical_tol_m)
-        self.graphs = {}
-        self.balances = {}
+        self.graphs: dict[str, ContactGraph] = {}
+        self.balances: dict[str, EquilibriumResult] = {}
 
-    def graph(self, state):
+    def graph(self, state: AssemblyState) -> ContactGraph:
         key = digest(state)
         if key not in self.graphs:
             if len(self.graphs) >= 128:
@@ -211,7 +224,7 @@ class SequenceEvaluator:
             self.graphs[key] = build_contact_graph(self.assembly, state, analysis)
         return self.graphs[key]
 
-    def equilibrium(self, state, ids):
+    def equilibrium(self, state: AssemblyState, ids: Sequence[str]) -> EquilibriumResult:
         # Pose/revision and the exact support subset both affect the model.
         key = digest((state, tuple(sorted(ids))))
         if key not in self.balances:
@@ -226,7 +239,7 @@ class SequenceEvaluator:
             )
         return self.balances[key]
 
-    def resources_valid(self, ids):
+    def resources_valid(self, ids: Iterable[str]) -> bool:
         resources = [self.supports[key].resource_id for key in ids]
         return (
             len(resources) == len(set(resources))
@@ -235,13 +248,13 @@ class SequenceEvaluator:
 
     def evaluate_insertion(
         self,
-        assembled_state,
-        part_id,
+        assembled_state: AssemblyState,
+        part_id: str,
         *,
-        supports_before=(),
-        supports_after=(),
-        removal_directions=None,
-    ):
+        supports_before: Sequence[str] = (),
+        supports_after: Sequence[str] = (),
+        removal_directions: ArrayLike | None = None,
+    ) -> tuple[SequenceStep | None, dict[str, Any] | None]:
         """Check installation at the pose in assembled_state.
 
         supports_before acts on the already installed remainder.
@@ -259,8 +272,14 @@ class SequenceEvaluator:
         )
 
     def evaluate_removal(
-        self, state, active_support_ids, part_id, *, remainder_support_ids=None, directions=None
-    ):
+        self,
+        state: AssemblyState,
+        active_support_ids: Sequence[str],
+        part_id: str,
+        *,
+        remainder_support_ids: Iterable[str] | None = None,
+        directions: ArrayLike | None = None,
+    ) -> tuple[SequenceStep | None, dict[str, Any] | None]:
         """Explicit removal spelling of the original evaluate API."""
         if remainder_support_ids is None and directions is None:
             # Older subclasses may implement only the three positional arguments.
@@ -273,7 +292,9 @@ class SequenceEvaluator:
             directions=directions,
         )
 
-    def _support_options(self, remainder, requested_ids):
+    def _support_options(
+        self, remainder: AssemblyState, requested_ids: Iterable[str] | None
+    ) -> Iterator[tuple[str, ...]]:
         candidates = sorted(
             key
             for key, support in self.supports.items()
@@ -291,7 +312,15 @@ class SequenceEvaluator:
         for count in range(maximum + 1):
             yield from combinations(candidates, count)
 
-    def evaluate(self, state, active, part_id, *, remainder_support_ids=None, directions=None):
+    def evaluate(
+        self,
+        state: AssemblyState,
+        active: Sequence[str],
+        part_id: str,
+        *,
+        remainder_support_ids: Iterable[str] | None = None,
+        directions: ArrayLike | None = None,
+    ) -> tuple[SequenceStep | None, dict[str, Any] | None]:
         """Original removal API, retained for callers and evaluator subclasses."""
         part = next(part for part in self.assembly.parts if part.part_id == part_id)
         handling = _handling(self.assembly, part, self.config)
@@ -346,16 +375,16 @@ class SequenceEvaluator:
 
     def _removal_step(
         self,
-        part_id,
-        state,
-        remainder,
-        active,
-        chosen,
-        removal,
-        initial_balance,
-        remainder_balance,
-        handling,
-    ):
+        part_id: str,
+        state: AssemblyState,
+        remainder: AssemblyState,
+        active: Sequence[str],
+        chosen: tuple[str, ...],
+        removal: RemovalResult,
+        initial_balance: EquilibriumResult,
+        remainder_balance: EquilibriumResult,
+        handling: Mapping[str, Any],
+    ) -> SequenceStep:
         length = sum(
             np.linalg.norm(end[:3, 3] - start[:3, 3])
             for start, end in zip(removal.poses, removal.poses[1:])
@@ -378,7 +407,12 @@ class SequenceEvaluator:
         )
 
 
-def _removal_events(part_id, supports_before, supports_after, evaluator):
+def _removal_events(
+    part_id: str,
+    supports_before: Sequence[str],
+    supports_after: Sequence[str],
+    evaluator: SequenceEvaluator,
+) -> tuple[dict[str, Any], ...]:
     """Acquire the receiver before releasing the old support.
 
     Adding optional force generators preserves the prior equilibrium.
@@ -423,20 +457,20 @@ class _RemovalSearchNode(NamedTuple):
 
     state: AssemblyState
     active_support_ids: tuple
-    steps: tuple
+    steps: tuple[SequenceStep, ...]
     cost: float
-    pending_parts: list | None = None
+    pending_parts: list[str] | None = None
 
 
 def plan_sequence(
-    assembly,
-    initial_state=None,
+    assembly: Assembly,
+    initial_state: AssemblyState | None = None,
     *,
-    supports=(),
-    initial_support_ids=(),
-    config=None,
-    evaluator=None,
-):
+    supports: Iterable[AuxiliarySupport] = (),
+    initial_support_ids: Iterable[str] = (),
+    config: SequenceConfig | None = None,
+    evaluator: SequenceEvaluator | None = None,
+) -> SequenceResult:
     """Find a first feasible removal order, then independently replay insertion.
 
     DFS evaluates siblings lazily; beam keeps the declared number of candidates.
@@ -572,7 +606,9 @@ def plan_sequence(
     return finish("unknown", (), state, "finite_search_exhausted_not_global_infeasibility")
 
 
-def replay_sequence(assembly, plan, *, evaluator=None):
+def replay_sequence(
+    assembly: Assembly, plan: SequenceResult, *, evaluator: SequenceEvaluator | None = None
+) -> dict[str, Any]:
     """Independently recheck forward insertion paths, state chain and load transfer."""
     if plan.status != "success":
         return dict(status="unknown", reason="no_complete_plan")

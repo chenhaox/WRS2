@@ -5,21 +5,56 @@ resolution; this is a sampled kinematic replay, not a dynamics/CCD certificate.
 The carried original mesh is checked separately from MuJoCo convex proxies.
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from time import perf_counter
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy.optimize import linprog
 from scipy.spatial.transform import Rotation
-from .model import AssemblyState, Part, MeshData, ContactConfig, freeze, digest
-from .part_motion import ContactPolicy, MotionConfig, validate_object_path
-from .sequence import replay_sequence, _restricted_config, _balanced
-from .contact.analysis import analyze_contacts
-from .contact.analysis import analyze_pair
+
+from .adapters.wrs_scene import (
+    part_from_scene_object,
+    rigid_tf_from_wrs,
+    scene_object_from_part,
+)
+from .contact.analysis import analyze_contacts, analyze_pair
 from .contact.graph import build_contact_graph
-from .geometry.proximity import MeshProximity
-from .stability import check_equilibrium, _generators
 from .force_points import prepare_force_points
-from .adapters.wrs_scene import scene_object_from_part, part_from_scene_object, rigid_tf_from_wrs
+from .geometry.proximity import MeshProximity, ProximityBackend
+from .model import (
+    Assembly,
+    AssemblyState,
+    ContactConfig,
+    FloatArray,
+    IntArray,
+    MeshData,
+    Part,
+    digest,
+    freeze,
+)
+from .part_motion import ContactPolicy, MotionConfig, validate_object_path
+from .sequence import (
+    AuxiliarySupport,
+    SequenceResult,
+    SequenceStep,
+    _balanced,
+    _restricted_config,
+    replay_sequence,
+)
+from .stability import _generators, check_equilibrium
+
+if TYPE_CHECKING:
+    from wrs.grasp.grasp import Grasp
+    from wrs.manipulation.arm import SingleArmManipulation
+    from wrs.motion.core.motion_data import MotionData
+    from wrs.robots.base.mech_base import MechBase
+    from wrs.robots.base.tcp import TCP
+    from wrs.robots.end_effectors.ee_mixins import JawView
 
 
 @dataclass(frozen=True)
@@ -37,7 +72,7 @@ class ExecutionConfig:
     time_limit_s: float = 180.0
     seed: int = 7
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         for k in (
             "joint_step_rad",
             "cartesian_step_m",
@@ -58,11 +93,11 @@ class ExecutionConfig:
 
 @dataclass(frozen=True)
 class ExecutionArm:
-    arm: object
+    arm: SingleArmManipulation
     finger_normal_force_n: float = 30.0
     contact_friction: float = 0.5
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if (
             not np.isfinite(self.finger_normal_force_n)
             or self.finger_normal_force_n <= 0
@@ -75,22 +110,22 @@ class ExecutionArm:
 @dataclass(frozen=True, eq=False)
 class ExecutionResult:
     status: str
-    frames: tuple
-    events: tuple
-    diagnostics: dict
+    frames: tuple[Mapping[str, Any], ...]
+    events: tuple[Mapping[str, Any], ...]
+    diagnostics: Mapping[str, Any]
     input_digest: str
     execution_validated: bool = False
     validation_level: str = "not_validated"
-    contexts: tuple = ()
+    contexts: tuple[Mapping[str, Any], ...] = ()
     config: ExecutionConfig = field(default_factory=ExecutionConfig)
     schema_version: str = "wrs.assembly.execution/1"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         for k in ("frames", "events", "diagnostics", "contexts"):
             object.__setattr__(self, k, freeze(getattr(self, k)))
 
 
-def _box_grasps(part, gripper):
+def _box_grasps(part: Part, gripper: MechBase | JawView) -> list[Grasp]:
     """Deterministic central side pinches for a verified axis-aligned box mesh."""
     from wrs.grasp.grasp import Grasp
 
@@ -132,7 +167,14 @@ def _box_grasps(part, gripper):
     return result
 
 
-def generate_execution_grasps(part, gripper, *, max_grasps=12, seed=7, candidates=None):
+def generate_execution_grasps(
+    part: Part,
+    gripper: MechBase | JawView,
+    *,
+    max_grasps: int = 12,
+    seed: int = 7,
+    candidates: Iterable[Grasp] | None = None,
+) -> tuple[Grasp, ...]:
     """WRS Grasp records; deterministic boxes, seeded antipodal for other meshes."""
     q = np.asarray(gripper.qs).copy()
     try:
@@ -220,7 +262,13 @@ def generate_execution_grasps(part, gripper, *, max_grasps=12, seed=7, candidate
         gripper.fk(qs=q)
 
 
-def _grasp_contacts(part, grasp, gripper, backend, tolerance):
+def _grasp_contacts(
+    part: Part,
+    grasp: Grasp,
+    gripper: MechBase | JawView,
+    backend: ProximityBackend,
+    tolerance: float,
+) -> tuple[FloatArray, FloatArray] | None:
     c = np.asarray(grasp.pose[:3, 3], dtype=float)
     axis = np.asarray(grasp.pose[:3, :3], dtype=float) @ np.asarray(gripper.open_dir, dtype=float)
     axis /= np.linalg.norm(axis)
@@ -245,7 +293,14 @@ def _grasp_contacts(part, grasp, gripper, backend, tolerance):
     return q.points_local_m, inward
 
 
-def _grasp_wrench_feasible(part, tf, contacts, binding, force_world, torque_at_com):
+def _grasp_wrench_feasible(
+    part: Part,
+    tf: FloatArray,
+    contacts: tuple[FloatArray, FloatArray, IntArray],
+    binding: ExecutionArm,
+    force_world: FloatArray,
+    torque_at_com: FloatArray,
+) -> bool:
     if part.com_local_m is None:
         return False
     p, n, groups = contacts
@@ -270,7 +325,13 @@ def _grasp_wrench_feasible(part, tf, contacts, binding, force_world, torque_at_c
     return bool(solved.success and np.max(np.abs(matrix @ solved.x - rhs)) < 1e-6)
 
 
-def _finger_force_contacts(part, grasp, gripper, backend, tolerance):
+def _finger_force_contacts(
+    part: Part,
+    grasp: Grasp,
+    gripper: MechBase | JawView,
+    backend: ProximityBackend,
+    tolerance: float,
+) -> tuple[FloatArray, FloatArray, IntArray] | None:
     """Actual pad/part overlap polygons; each finger shares ONE force capacity."""
     probe = gripper.clone()
     probe.grip_at(grasp.pose[:3, 3], grasp.pose[:3, :3], grasp.provenance["jaw_width"])
@@ -331,7 +392,14 @@ class ExecutionWorkcell:
     the removal path's outside endpoint. Existing WRS Workcell owns activation.
     """
 
-    def __init__(self, assembly, arms, source_poses, *, grasps=None):
+    def __init__(
+        self,
+        assembly: Assembly,
+        arms: Mapping[str, SingleArmManipulation | ExecutionArm],
+        source_poses: Mapping[str, ArrayLike],
+        *,
+        grasps: Mapping[tuple[str, str], Iterable[Grasp]] | None = None,
+    ) -> None:
         from wrs.manipulation.workcell import Workcell
 
         self.assembly = assembly
@@ -360,7 +428,7 @@ class ExecutionWorkcell:
             for k, b in self.bindings.items()
         }
 
-    def reset(self):
+    def reset(self) -> None:
         for k, b in self.bindings.items():
             b.arm.body.fk(qs=self._initial_q[k])
             b.arm.end_effector.fk(qs=self._initial_ee[k])
@@ -368,7 +436,7 @@ class ExecutionWorkcell:
             self.objects[k].tf = p
 
 
-def _execution_binding(plan, cell, cfg):
+def _execution_binding(plan: SequenceResult, cell: ExecutionWorkcell, cfg: ExecutionConfig) -> str:
     # Include bases and concrete collision geometry; equal robot class names
     # alone do not identify a workcell. Never quantize configuration bindings.
     robots = []
@@ -410,7 +478,7 @@ class _PolicyCollider:
     an intended finger/target surface and a nonpenetrating true-mesh result.
     """
 
-    def __init__(self, cell, cfg):
+    def __init__(self, cell: ExecutionWorkcell, cfg: ExecutionConfig) -> None:
         from wrs.collider.mj_collider import MJCollider
 
         self.cell, self.cfg = cell, cfg
@@ -561,7 +629,7 @@ class _PolicyCollider:
             np.min(np.abs(np.einsum("ij,ij->i", point - p, n))) <= self.cfg.contact_roundoff_m * 2
         )
 
-    def is_collided(self, qs):
+    def is_collided(self, qs: ArrayLike) -> bool:
         self.checks += 1
         self.last_failure = {}
         binding = self.cell.bindings[self.active]
@@ -613,13 +681,13 @@ class _InsertionTarget:
 class _GraspAttachment:
     """Main-hand contact permission saved while the auxiliary arm takes over."""
 
-    grasp: object
-    contacts: object
-    force_contacts: object
-    tcp: object
-    hold_tf: np.ndarray
+    grasp: Grasp
+    contacts: tuple[FloatArray, FloatArray]
+    force_contacts: tuple[FloatArray, FloatArray, IntArray]
+    tcp: TCP
+    hold_tf: FloatArray
 
-    def restore(self, collider):
+    def restore(self, collider: _PolicyCollider) -> None:
         collider.grasp = self.grasp
         collider.contacts = self.contacts
         collider.force_contacts = self.force_contacts
@@ -634,7 +702,9 @@ class _ExecutionSession:
     class, and robot settings, poses and RNG are restored on every exit.
     """
 
-    def __init__(self, plan, workcell, config):
+    def __init__(
+        self, plan: SequenceResult, workcell: ExecutionWorkcell, config: ExecutionConfig
+    ) -> None:
         self.plan = plan
         self.cell = workcell
         self.config = config
@@ -651,7 +721,7 @@ class _ExecutionSession:
         self.grasps_cache = {}
         self.main_resource = plan.config.handling.resource_id
 
-    def _finish(self, status, reason, **extra):
+    def _finish(self, status: str, reason: str, **extra: Any) -> ExecutionResult:
         if status == "unknown" and perf_counter() - self.started > self.config.time_limit_s:
             status, reason = "exhausted", "execution_time_budget"
         return ExecutionResult(
@@ -673,7 +743,7 @@ class _ExecutionSession:
             config=self.config,
         )
 
-    def _contact_policy(self, pid, tf):
+    def _contact_policy(self, pid: str, tf: FloatArray) -> ContactPolicy:
         state = AssemblyState(dict(self.collider.nominal, **{pid: tf}))
         graph = build_contact_graph(
             self.assembly,
@@ -689,7 +759,7 @@ class _ExecutionSession:
             tolerance_m=self.config.contact_roundoff_m,
         )
 
-    def _snapshot(self, phase):
+    def _snapshot(self, phase: str) -> None:
         context = dict(
             active=self.collider.active,
             target=self.collider.target,
@@ -735,7 +805,7 @@ class _ExecutionSession:
             )
         )
 
-    def _record_motion(self, motion, phase):
+    def _record_motion(self, motion: MotionData | None, phase: str) -> bool:
         if motion is None:
             self.failures.append(
                 dict(phase=phase, reason="WRS_planner_failed", details=self.collider.last_failure)
@@ -762,7 +832,7 @@ class _ExecutionSession:
                 self._snapshot(phase)
         return True
 
-    def _move_linear(self, world_tcp, phase):
+    def _move_linear(self, world_tcp: FloatArray, phase: str) -> bool:
         b = self.cell.bindings[self.collider.active]
         arm = b.arm
         q = np.asarray(arm.body.qs).copy()
@@ -783,7 +853,7 @@ class _ExecutionSession:
             return False
         return self._record_motion(seg, phase)
 
-    def _move_jaw(self, qgoal, phase):
+    def _move_jaw(self, qgoal: FloatArray, phase: str) -> bool:
         b = self.cell.bindings[self.collider.active]
         ee = b.arm.end_effector
         start = np.asarray(ee.qs).copy()
@@ -802,7 +872,9 @@ class _ExecutionSession:
             self._snapshot(phase)
         return True
 
-    def _acquire(self, rid, pid, policy, *, support=None):
+    def _acquire(
+        self, rid: str, pid: str, policy: ContactPolicy, *, support: AuxiliarySupport | None = None
+    ) -> bool:
         self.collider.activate(rid)
         self.collider.target = pid
         self.collider.policy = policy
@@ -956,7 +1028,7 @@ class _ExecutionSession:
             return False
         return True
 
-    def _release(self, rid, pid, *, auxiliary=False):
+    def _release(self, rid: str, pid: str, *, auxiliary: bool = False) -> bool:
         self.collider.activate(rid)
         self.collider.target = pid
         self.collider.held = False
@@ -985,7 +1057,7 @@ class _ExecutionSession:
         )
         return True
 
-    def _insert_part(self, step, target):
+    def _insert_part(self, step: SequenceStep, target: _InsertionTarget) -> ExecutionResult | None:
         """Lift from staging, transfer above the scene, insert, then seat within roundoff."""
         lift = target.source_tf.copy()
         lift[:3, 3] -= (target.source_tf @ self.collider.grasp.pose)[
@@ -1055,7 +1127,7 @@ class _ExecutionSession:
             )
         )
 
-    def _pick_from_staging(self, target):
+    def _pick_from_staging(self, target: _InsertionTarget) -> ExecutionResult | None:
         """The remaining staging assembly must balance without the carried part."""
         remainder = AssemblyState(
             {k: v for k, v in self.collider.nominal.items() if k != target.part_id}
@@ -1081,7 +1153,7 @@ class _ExecutionSession:
         if not self._acquire(self.main_resource, target.part_id, target.source_policy):
             return self._finish("unknown", "pick_failed")
 
-    def _execute_step(self, step):
+    def _execute_step(self, step: SequenceStep) -> ExecutionResult | None:
         part_id = step.part_id
         source = self.collider.nominal[part_id]
         source_policy = self._contact_policy(part_id, source)
@@ -1128,7 +1200,7 @@ class _ExecutionSession:
                     return self._finish("unknown", "auxiliary_release_failed")
         return self._verify_released_assembly(part_id)
 
-    def _verify_released_assembly(self, part_id):
+    def _verify_released_assembly(self, part_id: str) -> ExecutionResult | None:
         """After release, only installed contacts and declared auxiliary holds remain."""
         state = AssemblyState(self.collider.nominal)
         graph = build_contact_graph(
@@ -1154,7 +1226,7 @@ class _ExecutionSession:
             )
         )
 
-    def run(self):
+    def run(self) -> ExecutionResult:
         if replay_sequence(self.assembly, self.plan)["status"] != "valid":
             return self._finish("unknown", "M2_forward_replay_failed")
         required = {self.plan.config.handling.resource_id} | {
@@ -1231,12 +1303,16 @@ class _ExecutionSession:
             self.cell.reset()
 
 
-def validate_execution(plan, workcell, *, config=None):
+def validate_execution(
+    plan: SequenceResult, workcell: ExecutionWorkcell, *, config: ExecutionConfig | None = None
+) -> ExecutionResult:
     """Plan and independently replay a complete forward WRS assembly candidate."""
     return _ExecutionSession(plan, workcell, config or ExecutionConfig()).run()
 
 
-def replay_execution(result, workcell, *, plan):
+def replay_execution(
+    result: ExecutionResult, workcell: ExecutionWorkcell, *, plan: SequenceResult
+) -> dict[str, Any]:
     """Fresh world, no rounded joint cache: verify state chain, FK and loads."""
     from wrs.grasp.grasp import Grasp
     from wrs.robots.base.tcp import TCP

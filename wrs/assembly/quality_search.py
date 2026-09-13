@@ -1,14 +1,38 @@
 """Forward quality-guided DFS, with bounded supports and existing M2 replay."""
 
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from itertools import combinations, chain, islice
+from itertools import chain, combinations, islice
 from time import perf_counter
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
-from .model import AssemblyState, digest, freeze
-from .quality import StepQuality, score_assemblability, sequence_quality, quality_upper_bound
-from .directions import DirectionConfig, assembly_directions
-from .sequence import SequenceConfig, SequenceEvaluator, SequenceResult, replay_sequence, _balanced
-from .stability_sweep import StabilitySweepConfig, DirectionalStabilityAnalyzer
+
+from .contact.graph import ContactGraph
+from .directions import DirectionConfig, DirectionResult, assembly_directions
+from .model import Assembly, AssemblyState, digest, freeze
+from .quality import (
+    AssemblabilityScore,
+    StepQuality,
+    quality_upper_bound,
+    score_assemblability,
+    sequence_quality,
+)
+from .sequence import (
+    AuxiliarySupport,
+    SequenceConfig,
+    SequenceEvaluator,
+    SequenceResult,
+    SequenceStep,
+    _balanced,
+    replay_sequence,
+)
+from .stability_sweep import DirectionalStabilityAnalyzer, StabilitySweepConfig
+
+if TYPE_CHECKING:
+    from .graspability import GraspabilityAnalyzer, GraspabilityResult
 
 
 @dataclass(frozen=True)
@@ -32,7 +56,7 @@ class QualitySearchConfig:
     sweep: StabilitySweepConfig = field(default_factory=StabilitySweepConfig)
     direction: DirectionConfig = field(default_factory=DirectionConfig)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not np.isfinite(self.support_penalty) or self.support_penalty < 1:
             raise ValueError("Invalid support penalty")
         if type(self.max_expansions) is not int or self.max_expansions < 1:
@@ -52,7 +76,13 @@ class QualitySearchConfig:
 class _QualityDepthFirstSearch:
     """Search bookkeeping only; the callback owns all physical checks."""
 
-    def __init__(self, items, expand, config, accept_complete):
+    def __init__(
+        self,
+        items: tuple[str, ...],
+        expand: Callable[..., Iterable[QualityTransition]],
+        config: QualitySearchConfig,
+        accept_complete: Callable[..., bool] | None,
+    ) -> None:
         self.items = items
         self.expand = expand
         self.config = config
@@ -66,7 +96,7 @@ class _QualityDepthFirstSearch:
         self.complete = True
         self.trace = []
 
-    def run(self, initial_context):
+    def run(self, initial_context: object) -> dict[str, Any]:
         self.visit(initial_context, self.items, (), (), ())
         return dict(
             best=self.best,
@@ -79,13 +109,15 @@ class _QualityDepthFirstSearch:
             elapsed_s=perf_counter() - self.started,
         )
 
-    def time_expired(self):
+    def time_expired(self) -> bool:
         if perf_counter() - self.started >= self.config.time_limit_s:
             self.complete = False
             return True
         return False
 
-    def prune_prefix(self, order, qualities, remaining_count):
+    def prune_prefix(
+        self, order: tuple[str, ...], qualities: tuple[StepQuality, ...], remaining_count: int
+    ) -> bool:
         if not qualities:
             return False
         upper = quality_upper_bound(
@@ -99,7 +131,12 @@ class _QualityDepthFirstSearch:
             return True
         return False
 
-    def consider_complete(self, order, qualities, payloads):
+    def consider_complete(
+        self,
+        order: tuple[str, ...],
+        qualities: tuple[StepQuality, ...],
+        payloads: tuple[object, ...],
+    ) -> None:
         self.leaves += 1
         score = sequence_quality(qualities, support_penalty=self.config.support_penalty)
         improves_best = score > self.best_score
@@ -112,7 +149,14 @@ class _QualityDepthFirstSearch:
         self.best_score = score
         self.trace.append(dict(order=order, status="incumbent", score=score))
 
-    def visit(self, context, remaining, order, qualities, payloads):
+    def visit(
+        self,
+        context: object,
+        remaining: tuple[str, ...],
+        order: tuple[str, ...],
+        qualities: tuple[StepQuality, ...],
+        payloads: tuple[object, ...],
+    ) -> None:
         if self.time_expired() or self.prune_prefix(order, qualities, len(remaining)):
             return
         if not remaining:
@@ -155,7 +199,14 @@ class _QualityDepthFirstSearch:
                     return
 
 
-def quality_depth_first(items, expand, *, initial_context=None, config=None, accept_complete=None):
+def quality_depth_first(
+    items: Iterable[str],
+    expand: Callable[..., Iterable[QualityTransition]],
+    *,
+    initial_context: object = None,
+    config: QualitySearchConfig | None = None,
+    accept_complete: Callable[..., bool] | None = None,
+) -> dict[str, Any]:
     """Search transitions supplied lazily by expand(context, item).
 
     accept_complete(payloads) validates an improving complete candidate.
@@ -175,12 +226,12 @@ class QualitySequenceResult:
     status: str
     plan: SequenceResult | None
     score: float | None
-    qualities: tuple
-    diagnostics: dict
+    qualities: tuple[StepQuality, ...]
+    diagnostics: Mapping[str, Any]
     input_digest: str
     config: QualitySearchConfig
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(self, "qualities", tuple(self.qualities))
         object.__setattr__(self, "diagnostics", freeze(self.diagnostics))
 
@@ -206,7 +257,14 @@ class _AssemblyQualityEvaluator:
     counts belong exclusively to the DFS, never to these caches.
     """
 
-    def __init__(self, assembly, grasp_analyzer, goal_state, supports, config):
+    def __init__(
+        self,
+        assembly: Assembly,
+        grasp_analyzer: GraspabilityAnalyzer,
+        goal_state: AssemblyState,
+        supports: Iterable[AuxiliarySupport],
+        config: QualitySearchConfig,
+    ) -> None:
         self.assembly = assembly
         self.grasp_analyzer = grasp_analyzer
         self.config = config
@@ -222,9 +280,9 @@ class _AssemblyQualityEvaluator:
         self.sequence = SequenceEvaluator(assembly, config.sequence, self.supports)
         self.unresolved = []
         self.rejected = []
-        self.stability_cache = {}
-        self.transition_cache = {}
-        self.verified_plans = {}
+        self.stability_cache: dict[str, _StabilityMetric] = {}
+        self.transition_cache: dict[str, list[QualityTransition]] = {}
+        self.verified_plans: dict[str, SequenceResult] = {}
         self.binding = digest(
             (
                 "quality_sequence/1",
@@ -236,7 +294,7 @@ class _AssemblyQualityEvaluator:
             )
         )
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         if digest(self.grasp_analyzer.assembly) != digest(self.assembly):
             raise ValueError("Grasp analyzer belongs to another assembly")
         if set(self.goal.poses) != set(self.parts):
@@ -249,7 +307,9 @@ class _AssemblyQualityEvaluator:
         if any(s.resource_id == self.config.sequence.handling.resource_id for s in self.supports):
             raise ValueError("Conflicting arm resources")
 
-    def _qualified_grasps(self, context, installed_state, part_id):
+    def _qualified_grasps(
+        self, context: _AssemblyContext, installed_state: AssemblyState, part_id: str
+    ) -> GraspabilityResult | None:
         grasp = self.grasp_analyzer.analyze(installed_state, part_id)
         if grasp.count is None:
             self.unresolved.append(
@@ -267,7 +327,9 @@ class _AssemblyQualityEvaluator:
             return None
         return grasp
 
-    def _directions_and_score(self, graph, part_id):
+    def _directions_and_score(
+        self, graph: ContactGraph, part_id: str
+    ) -> tuple[DirectionResult, AssemblabilityScore] | None:
         directions = assembly_directions(graph, (part_id,), config=self.config.direction)
         score = score_assemblability(directions)
         if score.score is None or directions.best_direction is None:
@@ -278,7 +340,9 @@ class _AssemblyQualityEvaluator:
             return None
         return directions, score
 
-    def _stability_without_support(self, state, graph):
+    def _stability_without_support(
+        self, state: AssemblyState, graph: ContactGraph
+    ) -> _StabilityMetric:
         """Compute S once per installed state; unknown never becomes zero."""
         key = digest(state)
         if key not in self.stability_cache:
@@ -307,7 +371,9 @@ class _AssemblyQualityEvaluator:
             self.stability_cache[key] = metric
         return self.stability_cache[key]
 
-    def _support_subsets(self, state, stability_score, part_id):
+    def _support_subsets(
+        self, state: AssemblyState, stability_score: float, part_id: str
+    ) -> list[tuple[str, ...]]:
         if stability_score > 0:
             return [()]
         eligible = sorted(
@@ -326,7 +392,14 @@ class _AssemblyQualityEvaluator:
             subsets = subsets[: config.max_support_subsets]
         return subsets
 
-    def _insertion_step(self, context, installed_state, part_id, support_ids, directions):
+    def _insertion_step(
+        self,
+        context: _AssemblyContext,
+        installed_state: AssemblyState,
+        part_id: str,
+        support_ids: tuple[str, ...],
+        directions: DirectionResult,
+    ) -> SequenceStep | None:
         simultaneous = tuple(sorted(set(support_ids) | set(context.active_support_ids)))
         if not self.sequence.resources_valid(simultaneous):
             return None
@@ -351,7 +424,7 @@ class _AssemblyQualityEvaluator:
             )
         return step
 
-    def expand(self, context, part_id):
+    def expand(self, context: _AssemblyContext, part_id: str) -> Iterator[QualityTransition]:
         """G -> A -> S -> finite supports -> verified insertion."""
         installed_state = AssemblyState(
             dict(context.assembly_state.poses, **{part_id: self.goal.poses[part_id]}),
@@ -410,10 +483,10 @@ class _AssemblyQualityEvaluator:
             )
 
     @staticmethod
-    def _plan_key(steps):
+    def _plan_key(steps: Sequence[SequenceStep]) -> str:
         return digest(tuple((s.part_id, s.supports_before, s.supports_after) for s in steps))
 
-    def _make_plan(self, insertion_steps):
+    def _make_plan(self, insertion_steps: Iterable[SequenceStep]) -> SequenceResult:
         # Preserve SequenceResult's established removal-oriented storage.
         insertion_steps = tuple(insertion_steps)
         final_supports = insertion_steps[-1].assembly_supports_after
@@ -444,7 +517,7 @@ class _AssemblyQualityEvaluator:
             ),
         )
 
-    def accept_complete(self, steps):
+    def accept_complete(self, steps: tuple[SequenceStep, ...]) -> bool:
         if self.config.require_final_without_support and steps[-1].assembly_supports_after:
             return False
         plan = self._make_plan(steps)
@@ -457,7 +530,7 @@ class _AssemblyQualityEvaluator:
         )
         return True
 
-    def result(self, search_result):
+    def result(self, search_result: dict[str, Any]) -> QualitySequenceResult:
         best = search_result.pop("best")
         plan = None
         qualities = ()
@@ -495,7 +568,14 @@ class _AssemblyQualityEvaluator:
         )
 
 
-def plan_quality_sequence(assembly, grasp_analyzer, goal_state=None, *, supports=(), config=None):
+def plan_quality_sequence(
+    assembly: Assembly,
+    grasp_analyzer: GraspabilityAnalyzer,
+    goal_state: AssemblyState | None = None,
+    *,
+    supports: Iterable[AuxiliarySupport] = (),
+    config: QualitySearchConfig | None = None,
+) -> QualitySequenceResult:
     """Search forward insertions using G/A/S, finite supports and M2 replay.
 
     A uses the finite ASP_OLD cone-class score. S is the sampled, capped,

@@ -86,6 +86,11 @@ class Block(importlib.abc.MetaPathFinder):
             raise RuntimeError('Optional import attempted: '+fullname)
 sys.meta_path.insert(0, Block())
 from wrs.assembly import MeshData, Part, analyze_pair
+import wrs.assembly as assembly_api
+# Type-only WRS references must not pull rendering or simulation into imports.
+for name in assembly_api.__all__:
+    getattr(assembly_api, name)
+from wrs.assembly.adapters import legacy, wrs_scene
 from wrs.assembly.primitives import box, pose
 result=analyze_pair(Part('a',box()),pose(),Part('b',box()),pose((0,0,.1)))
 assert any(p.classification=='active' for p in result.patches)
