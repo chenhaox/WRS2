@@ -19,6 +19,7 @@
 | stability_cases.py | 多种稳定性场景及接触点约简对照 |
 | stability_sweep.py | 六维载荷的 CPU / GPU 批量计算对照 |
 | execution.py | M2 计划与回放，按需检查 M3 单 / 双臂 |
+| readability.py | 可读性重构前后相同输入的结果、搜索工作量与耗时对照 |
 | nine_cases.py | 九种接触、方向、维数和可装配性分数 |
 | paper_cases.py | 论文完整装配、各前缀及 raw / nominal 证据 |
 

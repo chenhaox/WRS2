@@ -1,5 +1,7 @@
 # Assembly Planner 重构：implementation plan
 
+代码阅读入口：[搜索、安装／拆卸状态、静力方程与机器人执行流程](code-readability.zh.md)。本次整理保留公开 API、缓存和数值算法，将主流程与物理评估拆开，并提供固定输入的前后性能对照。
+
 当前例子已整理为 **9 个直接启动 WRS 的脚本**，参数在文件顶部修改，见 [examples/assembly 使用说明](../../examples/assembly/README.md)。性能测试、批量审查和唯一保留的 SDF 分辨率 HTML 报告放在 [benchmarks/assembly](../../benchmarks/assembly/README.md)，运行普通例子不再生成 `output/`。其它交接文档中的旧命令和计时为历史记录。
 
 状态：**M1（00—03）与 M2（04—07）已实现；M3 的单/双臂模拟执行、独立回放与示例已实现**。2026-09-12。验证级别及范围见 [M2/M3 交接](m2-m3-execution.zh.md)。
