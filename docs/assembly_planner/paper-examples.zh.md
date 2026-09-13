@@ -8,19 +8,19 @@
 
 ```powershell
 $assemblyPython = 'D:\code\venv312\.venv\Scripts\python.exe'
-& $assemblyPython examples/assembly/nine_direction_cases.py --case g --port 8899
-& $assemblyPython examples/assembly/paper_contact_directions.py --case fig08_soma3 --port 8900
+& $assemblyPython examples/assembly/directions.py
+& $assemblyPython examples/assembly/paper_assemblies.py
 ```
 
 WRS 控件保持简单：选择图号后点“加载所选场景”；选择当前移动零件；选择 `socp` 或 `fibonacci`。中间状态 `0` 是完整结构，`1..N` 是检查顺序的前 N 件。每步重新绑定几何和位姿、提取当前接触，地面保持最终装配位置的地面高度。前缀里有悬空件并不奇怪；本例未模拟辅助机械臂托持，不能据此认定该中间状态稳定。
 
-左边画实际点/线/面接触，保留孔洞及干涉区域，滑条调零件不透明度。右边是世界坐标方向球：蓝箭头为拆出方向，紫箭头为反向插入方向。SOCP 画一个连续最优方向；Fibonacci 画筛选后的可行集合，并显示其选中方向。默认 `--samples 6500`，退化情形使用可行子空间上的圆或轴端点。灰点仅勾勒球面。分数来自可行锥分类，不来自绿色显示点的数量。
+左边画实际点/线/面接触，保留孔洞及干涉区域，滑条调零件不透明度。右边是世界坐标方向球：蓝箭头为拆出方向，紫箭头为反向插入方向。SOCP 画一个连续最优方向；Fibonacci 画筛选后的可行集合，并显示其选中方向。文件顶部默认 `SAMPLES = 6500`，退化情形使用可行子空间上的圆或轴端点。灰点仅勾勒球面。分数来自可行锥分类，不来自绿色显示点的数量。
 
 `unknown` 时保留接触证据与原因，不画通过验证的方向；`blocked` 是当前局部纯平移模型锁死；`unconstrained` 是当前没有有效约束。它们都不是“稳定性”标签。即使 `feasible`，也仍需有限路径和机器人执行验证。
 
 ## 九种情况
 
-入口：[nine_direction_cases.py](../../examples/assembly/nine_direction_cases.py)。用一个可动立方体和若干固定挡块构造实际几何，再提取接触法线；期望表不直接传给方向求解器。
+入口：[directions.py](../../examples/assembly/directions.py)。用一个可动立方体和若干固定挡块构造实际几何，再提取接触法线；期望表不直接传给方向求解器。
 
 | 类别 | 场景 | 可行空间维数 | ASP_OLD 分数 A |
 |---|---|---:|---:|
@@ -38,7 +38,7 @@ WRS 控件保持简单：选择图号后点“加载所选场景”；选择当�
 
 ## 论文图号覆盖与数据来源
 
-入口：[paper_contact_directions.py](../../examples/assembly/paper_contact_directions.py)。共 **20 个图号入口**，包含重复使用同一结构的实验变体；不是 20 组互不相同的原始装配。
+入口：[paper_assemblies.py](../../examples/assembly/paper_assemblies.py)。共 **20 个图号入口**，包含重复使用同一结构的实验变体；不是 20 组互不相同的原始装配。
 
 | 图号 / 入口 | 结构、来源 | 复现范围 |
 |---|---|---|
@@ -74,7 +74,7 @@ Fig.1 的结构属于 Soma 主例，Fig.7 的零件集用于 Fig.8–11。Fig.3 
 - 桥：原 `alframe.stl` 缺失，采用 **30×30×300 mm 实心梁**，参考旧方向与布局，解析放置相切位置。这不是原铝型材，不用于声称复现其质量、夹持或稳定性数值。
 - Burr：没有网格化或自动挪动；保留旧文件的间隙、干涉和不确定性。
 
-加 `--raw` 完全保留原 STL/JSON，只补明确声明的固定地面。缺原输入时报告 `missing_source`，不回退到重建模式。
+将文件顶部 `NOMINAL = False` 完全保留原 STL/JSON，只补明确声明的固定地面。缺原输入时报告 `missing_source`，不回退到重建模式。
 
 ## 本次发现并修复的接触问题
 
@@ -89,10 +89,10 @@ Fig.1 的结构属于 Soma 主例，Fig.7 的零件集用于 Fig.8–11。Fig.3 
 ## 检查结果与计时
 
 ```powershell
-& $assemblyPython examples/assembly/nine_direction_cases.py --headless
-& $assemblyPython examples/assembly/paper_contact_directions.py --all --headless
-& $assemblyPython examples/assembly/paper_contact_directions.py --all --prefixes --headless
-& $assemblyPython examples/assembly/paper_contact_directions.py --all --raw --headless
+& $assemblyPython benchmarks/assembly/nine_cases.py
+& $assemblyPython benchmarks/assembly/paper_cases.py
+# 检查中间步骤：先在 paper_cases.py 顶部设置 PREFIXES = True，再运行。
+# 检查原始数据：设置 NOMINAL = False，再运行。
 & $assemblyPython -m unittest discover -s tests/assembly -v
 ```
 
@@ -114,6 +114,6 @@ Fig.1 的结构属于 Soma 主例，Fig.7 的零件集用于 Fig.8–11。Fig.3 
 
 这次 6500 点运行中，单件 SOCP 最多约 11.52 ms，Fibonacci 最多约 7.82 ms；小场景通常为毫秒级。主要成本在几何接触检查，不在方向点筛选。结果含冷启动和系统负载波动，不是跨机器基准。图库后台单线程计算；重复访问同一场景/前缀使用最多 48 项的 LRU 缓存，两种方法和不同零件切换直接使用该状态结果。核心保留向量化半空间检查、稀疏 BVH、平面裁剪和已有批量方向筛选。
 
-报告在 `examples/assembly/output/nine_directions`、`examples/assembly/output/paper2021/{nominal,raw}`。`summary.json` 是完整状态，`prefix_summary.json` 是所有前缀；每步 JSON 同时保存接触证据、来源、更改记录、两种方向结果与耗时。输出属于可再生成文件，不随源代码提交。
+报告在 `benchmark_results/assembly/nine_directions`、`benchmark_results/assembly/paper2021/{nominal,raw}`。`summary.json` 是完整状态，`prefix_summary.json` 是所有前缀；每步 JSON 同时保存接触证据、来源、更改记录、两种方向结果与耗时。输出属于可再生成文件，不随源代码提交。
 
 下一步需要原始 `alframe.stl`、两份比较场景和经确认的 Burr 装配位姿；四件 Domino 需校验顶部倾斜接触。补齐这些后，再验证论文的稳定性、可抓取性和完整序列，不能仅凭当前方向例子宣布全部实验复现。

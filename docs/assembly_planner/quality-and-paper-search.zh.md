@@ -1,5 +1,7 @@
 # 抓取数量、可装配性评分与论文式正向 DFS
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-12；在 `codex/assembly-planner` 上实现。统一解释器为 `D:\code\venv312\.venv\Scripts\python.exe`。
 
 此次增加的是评分与搜索组合层。复用现有 WRS 抓取生成、SOCP 方向、GPU 多方向稳定性、M2 路径与 M3 回放，不重复建立另一套机器人或接触模型。
@@ -161,4 +163,4 @@ JSON 输出到 `examples/assembly/output/quality/`，包含每个前缀 S/G/A、
 3. 曲面指腹、软指接触与更通用夹爪的可靠力闭合模型；本次不能认证时明确保留 unknown。
 4. 旧 Soma/Burr/Leonardo 等完整数据集的同参数迁移与基准；中途换抓、整体重定向、CAD/B-Rep 和连续转动装配。
 
-代码入口：[独立评分](../../wrs/assembly/quality.py)、[WRS 抓取计数](../../wrs/assembly/graspability.py)、[质量 DFS](../../wrs/assembly/quality_search.py)、[例子](../../examples/assembly/quality_sequence_demo.py)。
+代码入口：[独立评分](../../wrs/assembly/quality.py)、[WRS 抓取计数](../../wrs/assembly/graspability.py)、[质量 DFS](../../wrs/assembly/quality_search.py)、[例子](../../examples/assembly/quality_sequence.py)。

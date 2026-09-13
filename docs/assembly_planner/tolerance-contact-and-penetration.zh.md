@@ -1,5 +1,7 @@
 # 容差接触规则与穿入表面显示
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-11；分支 `codex/assembly-planner`。统一解释器：`D:\code\venv312\.venv\Scripts\python.exe`。
 
 后续补充：[Touching 判定与点、线、面显示](touching.zh.md)。其中新增独立支撑平面接触路径；本文末尾 14 个 touch 返回 unknown 是该补充前的历史结果。

@@ -1,5 +1,7 @@
 # 方向求解的直观解释、实测耗时与退化处理建议
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-11，旧候选求解器基线 `e8cfd7e` 的解释记录。后续已实现独立 Fibonacci / SOCP API、低维处理和 WRS 示例，见[当前交接](directions-and-stability.zh.md)。本文“建议未实施”和旧计时均指当时基线；旧 `candidate_motions` 仍保留。
 
 [方向球和角度余量交互示意](assets/direction-space.html#margin-lesson) · [Assemble Them All 迁移标注](assemble-them-all-transfer.zh.md)

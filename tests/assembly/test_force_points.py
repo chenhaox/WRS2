@@ -8,7 +8,7 @@ import weakref
 import numpy as np
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'examples'/'assembly'))
-from _stability_cases import make_case,case_config
+from _shared.stability_cases import make_case,case_config
 from test_stability import scene,declared_contact
 from wrs.assembly import (ContactPatch,ContactAnalysis,Region,StabilityConfig,ExternalWrench,
                           LoadCase,check_equilibrium,build_contact_graph)

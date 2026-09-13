@@ -37,7 +37,7 @@ print('M2 headless boundary passed')
                     Part('part',box((.02,.02,.02)),pose((0,0,.01)),mass_kg=.1,com_local_m=(0,0,0),friction=.5)))
         with tempfile.TemporaryDirectory() as folder:
             manifest=Path(folder)/'input.json'; output=Path(folder)/'plan.json'; save_assembly(a,manifest)
-            r=subprocess.run([sys.executable,'examples/assembly/plan_assembly.py',str(manifest),'--output',str(output)],
+            r=subprocess.run([sys.executable,'tools/assembly/plan_manifest.py',str(manifest),'--output',str(output)],
                              cwd=Path(__file__).resolve().parents[2],capture_output=True,text=True,timeout=30)
             self.assertEqual(r.returncode,0,r.stderr)
             report=json.loads(output.read_text(encoding='utf-8'))

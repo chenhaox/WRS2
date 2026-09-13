@@ -1,5 +1,7 @@
 # 近接带的 unknown、双侧采样、边界分辨率与性能
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-10。使用 `D:\code\venv312\.venv\Scripts\python.exe`，在 `codex/assembly-planner` 分支复现。
 
 ## Bunny 的紫色不是“没有找到区域”

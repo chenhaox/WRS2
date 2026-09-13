@@ -1,10 +1,12 @@
 # Fibonacci 方向筛选、向量化与最优方向：实测对比
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-11 算法实验记录。结论：**固定球面采样适合显示允许区域和补充候选；默认求一个局部最优方向，建议使用连续最大余量优化，并保留低维判定。** 后续已接入独立 `solve_directions` / `assembly_directions` API，见[当前实现、WRS 示例与完整计时](directions-and-stability.zh.md)。旧 `candidate_motions` 未更改；本文安装目录与计时描述保留为实验当时的快照。
 
 ## 复现与测量范围
 
-脚本：[benchmark_direction_methods.py](../../examples/assembly/benchmark_direction_methods.py)。原始报告：[summary.json](../../examples/assembly/output/direction-methods/summary.json)，位于忽略的输出目录。
+脚本：[benchmark_direction_methods.py](../../benchmarks/assembly/direction_methods.py)。原始报告：[summary.json](../../examples/assembly/output/direction-methods/summary.json)，位于忽略的输出目录。
 
 ```powershell
 # 在 WRS2 根目录执行；samples 可配置。

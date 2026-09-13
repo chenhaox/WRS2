@@ -12,7 +12,7 @@ import numpy as np
 from scipy import sparse
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'examples'/'assembly'))
-from _stability_cases import make_case, case_config, case_supports
+from _shared.stability_cases import make_case, case_config, case_supports
 from wrs.assembly import check_equilibrium, ExternalWrench, StabilityConfig
 
 

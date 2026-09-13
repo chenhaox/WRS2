@@ -83,7 +83,7 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(check_force_closure(points,normals,friction=0)['status'],'not_force_closed')
 
     def test_wrs_catalogue_state_collision_and_caller_preservation(self):
-        from robot_execution_demo import make_demo
+        from _shared.robot import make_demo
         a, cell = make_demo(); hand = cell.bindings['main_arm'].arm.end_effector
         before = (hand.tf.copy(),hand.qs.copy())
         analyzer = GraspabilityAnalyzer(a,hand)
@@ -102,7 +102,7 @@ class QualityTests(unittest.TestCase):
         np.testing.assert_array_equal(hand.tf,before[0]); np.testing.assert_array_equal(hand.qs,before[1])
 
     def test_forward_quality_plan_uses_real_grasps_and_replays(self):
-        from robot_execution_demo import make_demo
+        from _shared.robot import make_demo
         a, cell = make_demo()
         g = GraspabilityAnalyzer(a,cell.bindings['main_arm'].arm.end_effector)
         cfg = QualitySearchConfig(sweep=StabilitySweepConfig(backend='highs',direction_count=12))
@@ -120,7 +120,7 @@ class QualityTests(unittest.TestCase):
         self.assertTrue(robot.execution_validated)
 
     def test_unstable_intermediate_requires_finite_support_then_releases(self):
-        from quality_sequence_demo import make_quality_case
+        from _shared.quality import make_quality_case
         from wrs import or_2fg7
         a,supports = make_quality_case('counterweight')
         g = GraspabilityAnalyzer(a,or_2fg7.OR2FG7())
@@ -137,7 +137,7 @@ class QualityTests(unittest.TestCase):
         self.assertIsNone(failed.plan)
 
     def test_physical_bridge_pruning_agrees_with_exhaustive_orders(self):
-        from quality_sequence_demo import make_quality_case
+        from _shared.quality import make_quality_case
         from wrs import or_2fg7
         a,supports = make_quality_case('bridge'); g = GraspabilityAnalyzer(a,or_2fg7.OR2FG7())
         cfg = QualitySearchConfig(sweep=StabilitySweepConfig(backend='highs',direction_count=12))

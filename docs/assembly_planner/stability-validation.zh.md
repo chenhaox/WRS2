@@ -1,5 +1,7 @@
 # 稳定性可视化与计算核查
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-11。解释器：`D:\code\venv312\.venv\Scripts\python.exe`。
 
 后续点约简参数、floating 辅助点说明、beam 显示核查和最新开关对比计时见 [静力计算的力点约简](force-point-reduction.zh.md)。本文后半部保留约简前的基准数值。
@@ -24,7 +26,7 @@
 | slippery | 同一斜面，μ=0.2 | μ 小于 tan(20°)≈0.364，不可行 |
 | tripod | 三个分离支撑区、平台和圆柱载荷 | 名义及 0.1 N·m 扭矩可行；1 N·m 扭矩不可行 |
 
-这些接触面来自当前 `analyze_contacts`，没有为演示虚构接触点。模型尺寸、质量、局部质心、摩擦在 [_stability_cases.py](../../examples/assembly/_stability_cases.py) 中显式给出。辅助支撑是声明的有限施力能力，尚不代表机器人的可执行抓取。
+这些接触面来自当前 `analyze_contacts`，没有为演示虚构接触点。模型尺寸、质量、局部质心、摩擦在 [_stability_cases.py](../../examples/assembly/_shared/stability_cases.py) 中显式给出。辅助支撑是声明的有限施力能力，尚不代表机器人的可执行抓取。
 
 ## 图中内容与求解器一致吗
 

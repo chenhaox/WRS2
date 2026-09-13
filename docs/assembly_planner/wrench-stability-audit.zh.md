@@ -1,5 +1,7 @@
 # 多方向稳定性：六维采样、方程、量纲与 GPU 独立审查
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-11；审查起点 `c51cc3f`，分支 `codex/assembly-planner`。解释器固定为 `D:/code/venv312/.venv/Scripts/python.exe`。本次阅读旧仓库 `9b886441d75f7ea79eafa4cdd5dc90d3c14dbac3`，未运行其 pickle 或旧优化器。
 
 ## 1. 结论及实际修改

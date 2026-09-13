@@ -11,13 +11,13 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'examples'/'assembly')
 from wrs.assembly import Assembly,Part,ContactConfig,analyze_contacts,build_contact_graph,assembly_directions
 from wrs.assembly.primitives import box,pose
 from wrs.assembly.geometry.preprocess import prepare_mesh
-from _paper_cases import ASSETS,CATALOG,make_case,prefix_state,_random_parts,mesh
+from _shared.paper_cases import ASSETS,CATALOG,make_case,prefix_state,_random_parts,mesh
 
 
 class PaperExamplesTests(unittest.TestCase):
     def test_nine_physical_cases_both_methods(self):
-        from nine_direction_cases import compute
-        from _nine_direction_cases import CASES
+        from _shared.directions import compute
+        from _shared.direction_cases import CASES
         for key in CASES:
             with self.subTest(case=key): compute(key)
 
@@ -64,7 +64,7 @@ class PaperExamplesTests(unittest.TestCase):
             with self.assertRaises(ValueError): prefix_state(a,len(order)+1)
 
     def test_nominal_soma_domino_bridge_and_offset_beam_directions(self):
-        from paper_contact_directions import compute
+        from _shared.paper import compute
         for key in ('fig08_soma3','fig09_domino3','fig11_bridge6','fig12g','fig12h'):
             data=compute(key)
             for pid,results in data[3].items():
@@ -79,7 +79,7 @@ class PaperExamplesTests(unittest.TestCase):
                     self.assertAlmostEqual(patch.area_m2,width*(.06-2e-9),places=13)
 
     def test_burr_interference_is_not_a_certified_direction(self):
-        from paper_contact_directions import compute
+        from _shared.paper import compute
         data=compute('fig10_burr6')
         self.assertTrue(any(d['overlap']['status']=='penetrating' for d in data[2].pair_diagnostics))
         self.assertTrue(all(r['socp'].status=='unknown' for r in data[3].values()))

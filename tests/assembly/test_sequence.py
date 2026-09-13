@@ -4,7 +4,7 @@ import sys
 import unittest
 import numpy as np
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'examples'/'assembly'))
-from _stability_cases import make_case,case_supports
+from _shared.stability_cases import make_case,case_supports
 from wrs.assembly.model import AssemblyState,digest
 from wrs.assembly.sequence import (plan_sequence,replay_sequence,SequenceConfig,HandlingCapability,AuxiliarySupport)
 
@@ -28,7 +28,7 @@ class SequenceTests(unittest.TestCase):
         self.assertEqual([pid for _,pid in trace],['upper','lower','lower','upper'])
 
     def test_complex_gantry_and_distance_change_are_revalidated(self):
-        from _sequence_cases import make_case as complex_case
+        from _shared.sequence_cases import make_case as complex_case
         from wrs.assembly import MotionConfig
         a,s,g=complex_case('gantry')
         p=plan_sequence(a,s,config=SequenceConfig(motion=MotionConfig(outside_margin_m=.10)))

@@ -1,5 +1,7 @@
 # Touching 判定与点、线、面显示
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-11，分支 `codex/assembly-planner`。
 
 ## 之前为何所有 touch 都是 unknown

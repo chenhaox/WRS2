@@ -1,5 +1,7 @@
 # M1 审查与 M2.04 交接
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-11；基于 `b4c6ced` 审查。开发分支 `codex/assembly-planner`。
 实现与验收提交：`e73e6f4`。
 全部计算使用 `D:\code\venv312\.venv\Scripts\python.exe`，没有新增或升级依赖。

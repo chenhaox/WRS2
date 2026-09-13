@@ -1,5 +1,7 @@
 # ContactModel 多后端设计与 SDF 实现
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-10。开发分支 `codex/assembly-planner`，解释器统一为 `D:\code\venv312\.venv\Scripts\python.exe`。
 
 后续 v2 修正轴孔端部的三角形法线跳变和整单元台阶；增加真实 STL、最长边细分与分阶段计时，见 [SDF / STL 验收](sdf-stl-validation.zh.md)。下面历史面积记录对应 v1。

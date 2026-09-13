@@ -1,5 +1,7 @@
 # SDF 轴孔边界修正、真实 STL 与计时
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-10，分支 `codex/assembly-planner`。使用 `D:\code\venv312\.venv\Scripts\python.exe`。
 
 本页记录上轮的 v2 修复与计时。后续针对 STL 锯齿做了分辨率对比、距离上界批量化并澄清 A/B 与 unknown，见 [接触诊断与性能](contact-diagnostics.zh.md)；当前法兰和圆柱的示例默认分辨率改为 0.1 mm，下面旧表对应 1 mm。

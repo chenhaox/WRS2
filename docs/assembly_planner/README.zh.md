@@ -1,5 +1,7 @@
 # Assembly Planner 重构：implementation plan
 
+当前例子已整理为 **9 个直接启动 WRS 的脚本**，参数在文件顶部修改，见 [examples/assembly 使用说明](../../examples/assembly/README.md)。性能测试、批量审查和唯一保留的 SDF 分辨率 HTML 报告放在 [benchmarks/assembly](../../benchmarks/assembly/README.md)，运行普通例子不再生成 `output/`。其它交接文档中的旧命令和计时为历史记录。
+
 状态：**M1（00—03）与 M2（04—07）已实现；M3 的单/双臂模拟执行、独立回放与示例已实现**。2026-09-12。验证级别及范围见 [M2/M3 交接](m2-m3-execution.zh.md)。
 
 最新新增：[复用 WRS 抓取、独立 graspability / assemblability 评分与论文式正向质量 DFS](quality-and-paper-search.zh.md)。包含安全分支上界、实际夹爪可视化、有限支撑配重例子与当前尚缺能力；原反拆卸 DFS / beam API 保持原语义。
@@ -59,7 +61,7 @@ $assemblyPython = 'D:\code\venv312\.venv\Scripts\python.exe'
 & $assemblyPython -m pip --version
 # M1 测试与示例已建立：
 & $assemblyPython -m unittest discover -s tests/assembly -p 'test_*.py'
-& $assemblyPython examples/assembly/contact_demo.py --all
+& $assemblyPython examples/assembly/contacts.py
 & $assemblyPython tools/gen_api_index.py
 # 需要安装依赖时也通过 & $assemblyPython -m pip 调用。
 ```

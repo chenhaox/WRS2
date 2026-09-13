@@ -1,6 +1,8 @@
 # 静力计算的力点约简
 
-2026-09-11。实现：[force_points.py](../../wrs/assembly/force_points.py)、[stability.py](../../wrs/assembly/stability.py)。例子：[stability_demo.py](../../examples/assembly/stability_demo.py)。
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
+2026-09-11。实现：[force_points.py](../../wrs/assembly/force_points.py)、[stability.py](../../wrs/assembly/stability.py)。例子：[stability_demo.py](../../examples/assembly/stability.py)。
 
 ## 调用与显示
 

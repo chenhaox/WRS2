@@ -1,5 +1,7 @@
 # 静力、扰动、辅助支撑：当前实现与旧版对照
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-11。本轮核对代码并补充阶段基准，不修改静力求解算法。
 
 **历史阶段记录。** 后续已实现多方向极限和 CUDA 批量后端，见[新实现及计时](stability-sweep-and-sequence-ui.zh.md)；M2/M3 当前状态见[完整功能核对](old-new-feature-audit.zh.md)。下面保留当时版本的描述和数据。
@@ -109,7 +111,7 @@ result = check_equilibrium(assembly, state, graph, config=config)
 
 求解器依据：[SciPy HiGHS](https://docs.scipy.org/doc/scipy/reference/optimize.linprog-highs.html)、[SLSQP 数值 Jacobian](https://docs.scipy.org/doc/scipy/reference/optimize.minimize-slsqp.html)。这是模型与接口层面的选择理由，不是未经测试的倍速保证。
 
-复现：[benchmark_stability.py](../../examples/assembly/benchmark_stability.py)。原始逐次与阶段数据在 `examples/assembly/output/stability/benchmark.json`：
+复现：[benchmark_stability.py](../../benchmarks/assembly/stability.py)。原始逐次与阶段数据在 `examples/assembly/output/stability/benchmark.json`：
 
 ```powershell
 & 'D:\code\venv312\.venv\Scripts\python.exe' examples/assembly/benchmark_stability.py --repeat 51

@@ -95,8 +95,10 @@ site/
 # Claude Code local config
 .claude/
 
-# Reproducible assembly examples write manifests, reports and previews here.
-examples/assembly/output/
+# Assembly benchmarks write generated reports outside the examples tree.
+/benchmark_results/
+!examples/assembly/README.md
+!benchmarks/assembly/README.md
 
 # Reusable paper inputs and their provenance are source assets, not reports.
 !examples/assembly/assets/paper2021/provenance.json

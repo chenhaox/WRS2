@@ -1,5 +1,7 @@
 # 主分支 UI 合并与示例接触面显示
 
+> 入口整理说明（2026-09-13）：本文的旧脚本命令、输出路径和计时保留为历史记录。当前请按 [WRS 例子使用说明](../../examples/assembly/README.md) 运行，参数在文件顶部修改；benchmark 已移出 examples。
+
 2026-09-11。当前开发分支仍为 `codex/assembly-planner`。
 
 ## 文件保存与合并

@@ -4,7 +4,7 @@ import sys
 import unittest
 import numpy as np
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'examples'/'assembly'))
-from _stability_cases import make_case,block,case_supports
+from _shared.stability_cases import make_case,block,case_supports
 from wrs.assembly import (Assembly,StabilityConfig,StabilitySweepConfig,DirectionalStabilityAnalyzer,
     analyze_directional_stability,disturbance_directions,limit_wrench,ExternalWrench,
     analyze_contacts,build_contact_graph,check_equilibrium)
