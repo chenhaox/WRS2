@@ -60,7 +60,8 @@ def show_gallery(case_keys, loader, *, initial, port, title, stage=0):
             models.append(model); model.add_to_scene(base.scene)
         layers = contact_layers(analysis.patches)
         for layer in layers:
-            layer['cells']=[(np.asarray(c)-center)*scale+left for c in layer['cells']]
+            for key in ('cells', 'boundary_loops'):
+                layer[key]=[(np.asarray(c)-center)*scale+left for c in layer[key]]
             layer['points']=(layer['points']-center)*scale+left
         objects.extend(draw_contacts(base,layers,models,description=f'当前选中零件：{pid}。显示当前状态全部接触；尺寸只为显示等比例缩放。'))
         outline = fibonacci_directions(650)

@@ -28,4 +28,6 @@
 
 接触面显示、稳定性力点约简、floating 辅助支撑，以及求解点／摩擦锥／力箭头的显示开关使用 Checkbox。零件不透明度滑块支持拖动时实时更新；场景、零件和算法选择仍使用下拉菜单。
 
+接触面只描绘已经验证的区域轮廓（包括孔洞），不绘制内部三角分割边；没有有效轮廓时仍显示面片。面边界不另外计为线接触，面板分别列出面、线、点记录数。默认 Fig.8/Soma3 为 6 个面接触、0 个线接触；Domino 和桥梁例子同时包含面接触与真实线接触。
+
 清单规划和旧数据盘点属于工具，分别在 [tools/assembly/plan_manifest.py](../../tools/assembly/plan_manifest.py)、[legacy_inventory.py](../../tools/assembly/legacy_inventory.py)，保留它们所需的 CLI。算法说明与历史测量见 [assembly 文档](../../docs/assembly_planner/README.zh.md)。

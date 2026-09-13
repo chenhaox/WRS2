@@ -3,23 +3,18 @@ import numpy as np
 
 
 def contact_layers(patches):
-    """Keep actual region cells, including holes; never fill their convex hull."""
+    """Keep cells for filling and validated region loops for outlining, including holes."""
     return [dict(name=f'{p.part_a} / {p.part_b}', kind=p.classification,
                  dimension=p.dimension, cells=[c for r in p.regions for c in r.cells_world_m],
+                 boundary_loops=[loop for r in p.regions for loop in r.boundary_loops_world_m]
+                    if p.provenance.get('boundary_valid', True) else [],
                  points=p.points_a_world_m) for p in patches]
 
 
-def _boundary_segments(cells):
-    # Count shared cell edges: internal triangulation edges cancel.
-    edges = {}
-    for cell in cells:
-        if len(cell) < 3:
-            continue
-        for a,b in zip(cell,np.roll(cell,-1,axis=0)):
-            key = tuple(sorted((tuple(a),tuple(b))))
-            count,_ = edges.get(key,(0,(a,b)))
-            edges[key] = count+1,(a,b)
-    return [segment for count,segment in edges.values() if count == 1]
+def _boundary_segments(loops: list[np.ndarray]) -> list[np.ndarray]:
+    """Outline region rings; triangle edges can contain roundoff and T junctions."""
+    return [segment for loop in loops if len(loop) >= 3
+            for segment in np.stack((loop, np.roll(loop, -1, axis=0)), axis=1)]
 
 
 def draw_contacts(base, layers, part_models, *, offset=(0,0,0), description='', draw_boundaries=True):
@@ -45,7 +40,9 @@ def draw_contacts(base, layers, part_models, *, offset=(0,0,0), description='', 
                 for winding in (np.asarray(faces),np.asarray(faces)[:,::-1]):
                     overlays.append(wssop.mesh(vertices,winding,rgb=rgb,alpha=.88,
                                                name=f"contact: {layer['name']} [{layer['kind']} ]"))
-            segments = _boundary_segments(cells) if draw_boundaries else []
+            # Missing/invalid outlines are omitted; cells still display the actual area.
+            loops = [np.asarray(loop)+offset for loop in layer.get('boundary_loops', ())]
+            segments = _boundary_segments(loops) if draw_boundaries else []
         elif layer['dimension'] == 1:
             segments = [pair for cell in cells for pair in zip(cell[:-1],cell[1:])]
         else:
@@ -63,7 +60,11 @@ def draw_contacts(base, layers, part_models, *, offset=(0,0,0), description='', 
     panel.add_label('legend',label='颜色',value='绿 active · 橙 near · 红 interference · 紫 unknown')
     if any(layer['kind']=='declared' for layer in layers):
         panel.add_label('ideal',label='蓝色配合面',value='声明的理想零间隙模型；不是 SDF 检测结果')
-    panel.add_label('count',label='区域',value=f'{len(layers)} 块（含点 / 线 / 面）')
+    counts = {dimension: sum(layer['dimension'] == dimension for layer in layers)
+              for dimension in (0, 1, 2)}
+    panel.add_label('count',label='接触维度',
+                    value=f'{len(layers)} 条记录：面 {counts[2]} · 线 {counts[1]} · 点 {counts[0]}')
+    panel.add_label('outline_hint',label='描边含义',value='面边界是轮廓描边，不另外计为线接触。')
 
     def show_contacts(visible: bool) -> None:
         for obj in overlays:
