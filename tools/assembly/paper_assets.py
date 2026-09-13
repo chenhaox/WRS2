@@ -40,6 +40,23 @@ def _asset(key):
 
 def _legacy(name, nominal):
     data = json.loads((ASSETS / "scenes" / f"{name}.json").read_text(encoding="utf-8"))
+    if name == "burrpuzzle" and nominal:
+        from tools.assembly.burr_assets import repair_burr_mesh
+
+        parts, corrections = [], []
+        for key, value in data.items():
+            geometry, record = repair_burr_mesh(mesh(_asset(key), False), _asset(key))
+            tf = pose(np.asarray(value["location"]) * 0.001, rotation_xyz(value["rotation"]))
+            parts.append(Part(key, geometry, tf))
+            corrections.append(dict(part=key, **record))
+        return parts, dict(
+            source="asp/data/burrpuzzle + declared nominal slot alignment",
+            reproduction="nominal_repaired",
+            note="名义修复：对齐槽面、键条落座并重建封闭表面，最大原顶点位移约 0.28 mm；"
+            "保留键条侧隙及非均匀槽宽。属于明确声明的配合模型，不是恢复原作者 CAD。"
+            "NOMINAL=False 可查看原始模型的穿插。blocked 表示该件局部平移受阻，不是计算失败。",
+            corrections=corrections,
+        )
     soma = name.startswith("datainfo")
     parts, corrections = [], []
     for key, value in data.items():

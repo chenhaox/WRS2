@@ -1,5 +1,7 @@
 # Assembly Planner 重构：implementation plan
 
+Burr 例子已修复：[原始槽面偏差、边界取整问题、名义模型与验证结果](burr-fix.zh.md)。原始模式保留穿插证据，默认名义模式给出明确的可动／互锁结果。
+
 最新目录整理：[模块分类、contact 与 geometry 的区别、内部文件用途及旧数据一次性转换](../../wrs/assembly/README.md)。`adapters/legacy.py` 已移出运行库；论文例子直接加载新版装配数据。
 
 文件审查与类型标注：[哪些代码已清理、哪些模块保留，以及 adapter 的用途](package-cleanup.zh.md)。

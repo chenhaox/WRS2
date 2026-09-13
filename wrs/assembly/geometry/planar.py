@@ -104,6 +104,35 @@ def trace_edges(edges):
     return tuple(loops), True
 
 
+def _weld_vertices(vertices: np.ndarray, tol: float) -> tuple[np.ndarray, np.ndarray]:
+    """Assign first-occurrence representatives by distance, without chaining.
+
+    Rounded grid keys split identical intersections at half-grid boundaries.
+    Exact duplicates are collapsed first; a batched nearest-neighbor query
+    limits radius searches to vertices that actually have a nearby neighbor.
+    Every merged point stays within tol of its own representative, including
+    across rounding boundaries. No dense points-by-points array is allocated.
+    """
+    _, first, inverse = np.unique(vertices, axis=0, return_index=True, return_inverse=True)
+    order = np.argsort(first)
+    remap = np.empty_like(order)
+    remap[order] = np.arange(len(order))
+    indexed = remap[inverse]
+    points = vertices[first[order]]
+    representative = np.arange(len(points))
+    if len(points) > 1:
+        tree = cKDTree(points)
+        distances, _ = tree.query(points, k=2, distance_upper_bound=np.nextafter(tol, np.inf))
+        for i in np.flatnonzero(distances[:, 1] <= tol):
+            if representative[i] != i:
+                continue
+            neighbors = np.asarray(tree.query_ball_point(points[i], tol), dtype=np.int64)
+            unassigned = neighbors[representative[neighbors] == neighbors]
+            representative[unassigned] = i
+    kept, compact = np.unique(representative, return_inverse=True)
+    return compact[indexed], points[kept]
+
+
 def cell_regions(cells, tol):
     """Group oriented 2D/3D cells and recover holes, splitting T junctions.
 
@@ -118,15 +147,7 @@ def cell_regions(cells, tol):
     oriented = [c[::-1] if np.shape(c)[1] == 2 and polygon_measure(c)[0] < 0 else c for c in cells]
     lengths = np.asarray([len(c) for c in oriented])
     flat = np.concatenate(oriented)
-    # Preserve first-occurrence IDs and representative coordinates. Sorting
-    # unique quantized keys alone would change deterministic boundary order.
-    keys = np.rint((flat-np.asarray(cells[0][0]))/tol).astype(np.int64)
-    _, first, inverse = np.unique(keys, axis=0, return_index=True, return_inverse=True)
-    order = np.argsort(first)
-    remap = np.empty_like(order)
-    remap[order] = np.arange(len(order))
-    indexed = remap[inverse]
-    points = flat[first[order]]
+    indexed, points = _weld_vertices(flat, tol)
     tree = cKDTree(points)
     starts = np.r_[0, np.cumsum(lengths)[:-1]]
     ends = np.cumsum(lengths)-1

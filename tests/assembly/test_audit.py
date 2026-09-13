@@ -45,6 +45,28 @@ class AuditTests(unittest.TestCase):
         self.assertTrue(valid)
         self.assertEqual(len(groups), 100)
 
+    def test_intersections_on_rounding_boundary_share_one_vertex(self):
+        # Two triangles cover one rectangle. Their shared corner differs only
+        # by floating-point roundoff, on opposite sides of a grid half-step.
+        width, height, tol = .0100000002, .02, 4e-10
+        a = np.array([[0, 0], [width, 0], [np.nextafter(width, np.inf), height]])
+        b = np.array([[0, 0], [np.nextafter(width, -np.inf), height], [0, height]])
+        for dimension in (2, 3):
+            cells = (a, b) if dimension == 2 else tuple(np.column_stack((p, np.zeros(3))) for p in (a, b))
+            for ordered in (cells, cells[::-1]):
+                groups, valid = cell_regions(ordered, tol)
+                self.assertTrue(valid)
+                self.assertEqual(len(groups), 1)
+                self.assertEqual(len(groups[0][1]), 1)
+                self.assertAlmostEqual(abs(polygon_measure(groups[0][1][0][:, :2])[0]), width*height)
+
+    def test_topology_welding_does_not_close_a_gap_larger_than_tolerance(self):
+        tol = 1e-6
+        square = np.array([[0., 0.], [.01, 0.], [.01, .01], [0., .01]])
+        groups, valid = cell_regions((square, square + [.01 + 1.1*tol, 0]), tol)
+        self.assertTrue(valid)
+        self.assertEqual(len(groups), 2)
+
     @unittest.skipUnless(importlib.util.find_spec('open3d'), 'optional open3d is absent')
     def test_field_reconfiguration_and_instance_identity(self):
         backend = SDFContactBackend(sdf_config=SDFConfig(open_surface='unsigned'))

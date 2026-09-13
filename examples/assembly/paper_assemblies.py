@@ -1,6 +1,7 @@
 """论文中的块状装配：接触面、装配方向和中间步骤。
 
 直接运行本文件；在下面修改参数。
+Burr 的 NOMINAL 模式包含明确记录的槽面修复；原始模式仍保留穿插。
 """
 from pathlib import Path
 import sys

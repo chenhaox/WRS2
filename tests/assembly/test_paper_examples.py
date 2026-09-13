@@ -81,7 +81,7 @@ class PaperExamplesTests(unittest.TestCase):
 
     def test_burr_interference_is_not_a_certified_direction(self):
         from _shared.paper import compute
-        data=compute('fig10_burr6')
+        data=compute('fig10_burr6',nominal=False)
         self.assertTrue(any(d['overlap']['status']=='penetrating' for d in data[2].pair_diagnostics))
         self.assertTrue(all(r['socp'].status=='unknown' for r in data[3].values()))
 

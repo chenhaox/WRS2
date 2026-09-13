@@ -8,6 +8,11 @@ millimetres; the STL format itself does not encode units.
 Run the examples directly; the legacy checkout is not needed at runtime.
 Examples now load the 34 native `wrs.assembly/1` files under `assemblies/`.
 Their inline geometry and pose translations use metres; rotations are matrices.
+The two Burr nominal manifests include declared slot-plane alignment and a
+closed-boundary rebuild (maximum source-vertex change below 0.3 mm). Raw Burr
+meshes/manifests preserve the original interference. These corrections are a
+nominal fit model, not recovered author CAD; see
+[Burr diagnosis and repair](../../../../docs/assembly_planner/burr-fix.zh.md).
 Raw and nominal modes remain separate, including provenance and corrections.
 Six unavailable raw modes still raise explicitly instead of being reconstructed.
 `tools/import_paper_example_assets.py` is the optional import utility. It reads
