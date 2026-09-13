@@ -1,7 +1,7 @@
 """Original local-cone fixtures retained for comparable historical measurements."""
 from dataclasses import replace
 from wrs.assembly import Assembly, Part, MatingRelation, ConstraintConfig, SDFContactBackend, SDFConfig
-from wrs.assembly.primitives import box, cylinder, pose
+from wrs.assembly.geometry.primitives import box, cylinder, pose
 
 
 def fixtures():

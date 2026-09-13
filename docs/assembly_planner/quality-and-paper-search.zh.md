@@ -28,7 +28,7 @@
 - `wrs/grasp/antipodal.py`：对向抓取生成；`polypodal.py`、`monocontact.py` 提供其它接触形式的生成工具。
 - `wrs/grasp/reasoner.py`：结合机器人 IK、碰撞与约束筛选抓取。
 - `wrs/manipulation/arm.py`、`pick_place.py`：机器人抓取筛选与 pick-and-place。
-- 当前 `wrs/assembly/execution.py::generate_execution_grasps` 已包装这些能力：盒体采用可重复的侧向夹持，其它网格调用 WRS antipodal；对真实夹爪指腹间距进行校准。
+- 当前 `wrs/assembly/robotics/execution.py::generate_execution_grasps` 已包装这些能力：盒体采用可重复的侧向夹持，其它网格调用 WRS antipodal；对真实夹爪指腹间距进行校准。
 
 新增 `GraspabilityAnalyzer` 复用这个入口，也接受调用者通过 `grasps={part_id: [Grasp, ...]}` 传入已有 WRS 抓取。每个实例复制夹爪，抓取记录和计算缓存绑定几何、配置与状态，不改变调用者的机器人/夹爪姿态。
 
@@ -163,4 +163,4 @@ JSON 输出到 `examples/assembly/output/quality/`，包含每个前缀 S/G/A、
 3. 曲面指腹、软指接触与更通用夹爪的可靠力闭合模型；本次不能认证时明确保留 unknown。
 4. 旧 Soma/Burr/Leonardo 等完整数据集的同参数迁移与基准；中途换抓、整体重定向、CAD/B-Rep 和连续转动装配。
 
-代码入口：[独立评分](../../wrs/assembly/quality.py)、[WRS 抓取计数](../../wrs/assembly/graspability.py)、[质量 DFS](../../wrs/assembly/quality_search.py)、[例子](../../examples/assembly/quality_sequence.py)。
+代码入口：[独立评分](../../wrs/assembly/planning/quality.py)、[WRS 抓取计数](../../wrs/assembly/robotics/graspability.py)、[质量 DFS](../../wrs/assembly/planning/quality_search.py)、[例子](../../examples/assembly/quality_sequence.py)。

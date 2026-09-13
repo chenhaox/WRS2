@@ -1,60 +1,16 @@
-"""Evidence-only HTML previews and optional WRS scenes; no contact decisions."""
+"""Optional WRS contact scenes; rendering never makes contact decisions."""
 
 from __future__ import annotations
 
-import json
-from collections.abc import Mapping, Sequence
-from os import PathLike
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from ..model import Assembly, AssemblyState, ContactAnalysis, to_dict
+from ..model import Assembly, AssemblyState, ContactAnalysis
 
 if TYPE_CHECKING:
     from wrs.scene.scene import Scene
 
 
 COLORS = {"active": "#078b70", "near": "#e89420", "interference": "#d74850", "unknown": "#8466b4"}
-
-
-def preview_case(
-    name: str, description: str, assembly: Assembly, state: AssemblyState, analysis: ContactAnalysis
-) -> dict[str, Any]:
-    """Make a JSON-compatible preview, with meshes at explicit world poses."""
-    return {
-        "name": name,
-        "description": description,
-        "meshes": [
-            {
-                "id": part.part_id,
-                "vertices": part.geometry.vertices @ state.poses[part.part_id][:3, :3].T
-                + state.poses[part.part_id][:3, 3],
-                "faces": part.geometry.faces,
-            }
-            for part in assembly.parts
-            if part.part_id in state.poses
-        ],
-        "analysis": analysis.to_dict(),
-    }
-
-
-def write_contact_html(cases: Sequence[Mapping[str, Any]], path: str | PathLike[str]) -> None:
-    """Write a standalone orbitable preview, without network libraries/services.
-
-    Parameters
-    ----------
-    cases : sequence of dict
-        Records returned by ``preview_case``; units remain metres in the data.
-    path : path-like
-        Output HTML. Camera controls affect display only, never analysis.
-    """
-    payload = json.dumps(to_dict(cases), ensure_ascii=False, allow_nan=False).replace(
-        "<", "\\u003c"
-    )
-    template = Path(__file__).with_name("_contact_viewer.html").read_text(encoding="utf-8")
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(template.replace("__ASSEMBLY_DATA__", payload), encoding="utf-8")
 
 
 def build_wrs_scene(assembly: Assembly, state: AssemblyState, analysis: ContactAnalysis) -> Scene:

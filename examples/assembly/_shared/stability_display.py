@@ -131,11 +131,11 @@ def draw_stability(base, assembly, state, result, config):
     panel.add_label('meaning',label='解释',value=f'内接 {config.friction_sides} 边锥；可行力可能不唯一。选单个零件查看对应锥和反力。紫箭头为额外外力。')
     panel.add_label('layer_status',label='摩擦锥图层')
     for key,label in (('points','求解点'),('cones','摩擦锥'),('forces','力箭头')):
-        panel.add_select(key,label=label,options=['显示','隐藏'],
-                         on_change=lambda v,k=key:change(k,v=='显示'))
+        panel.add_checkbox(key,label=f'显示{label}',value=settings[key],
+                           on_change=lambda v,k=key:change(k,v))
     def restore_layers():
         for key in objects:
-            panel.set_value(key,'显示')
+            panel.set_value(key,True)
             change(key,True)
     panel.add_button('restore',label='恢复受力图层',on_click=restore_layers)
     redraw()

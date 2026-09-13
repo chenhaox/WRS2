@@ -12,7 +12,7 @@
 
 ## 当前做了什么
 
-入口为 [check_equilibrium](../../wrs/assembly/stability.py)。它寻找“是否存在一组合法接触力，让每个自由零件的合力和合力矩都为零”。各体独立满足：
+入口为 [check_equilibrium](../../wrs/assembly/mechanics/equilibrium.py)。它寻找“是否存在一组合法接触力，让每个自由零件的合力和合力矩都为零”。各体独立满足：
 
 ```text
 Σ contact_force + mass * gravity + external_force = 0

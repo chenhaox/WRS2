@@ -4,7 +4,7 @@ from dataclasses import replace
 import numpy as np
 from wrs.assembly import (ContactAnalysis, ContactPatch, Region, ToleranceContactPolicy,
                           ContactAnalyzer, ContactConfig, ContactModel)
-from wrs.assembly.primitives import box, pose
+from wrs.assembly.geometry.primitives import box, pose
 
 
 def report(label='near', unsigned=False, band=.0005, gap=(.0002, .0005)):
@@ -52,4 +52,3 @@ class ContactPolicyTests(unittest.TestCase):
         for value in (0, -1, np.nan, np.inf):
             with self.assertRaises(ValueError):
                 ToleranceContactPolicy(value)
-

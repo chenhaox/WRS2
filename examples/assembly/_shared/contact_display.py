@@ -65,17 +65,17 @@ def draw_contacts(base, layers, part_models, *, offset=(0,0,0), description='', 
         panel.add_label('ideal',label='蓝色配合面',value='声明的理想零间隙模型；不是 SDF 检测结果')
     panel.add_label('count',label='区域',value=f'{len(layers)} 块（含点 / 线 / 面）')
 
-    def show_contacts(value):
+    def show_contacts(visible: bool) -> None:
         for obj in overlays:
-            (base.scene.add if value == '显示' else base.scene.remove)(obj)
+            (base.scene.add if visible else base.scene.remove)(obj)
 
     def set_opacity(value):
         for model in part_models:
             model.alpha = value
 
-    panel.add_select('show',label='接触面',options=['显示','隐藏'],value='显示',on_change=show_contacts)
-    panel.add_label('opacity_hint',label='透明度操作',value='0 隐藏零件，1 完全不透明；松开滑条生效')
+    panel.add_checkbox('show',label='显示接触面',value=True,on_change=show_contacts)
+    panel.add_label('opacity_hint',label='透明度操作',value='0 隐藏零件，1 完全不透明；拖动时实时更新')
     panel.add_slider('opacity',label='零件不透明度',min_value=0,max_value=1,step=.05,
-                      value=.2,on_change=set_opacity)
+                      value=.2,on_change=set_opacity,continuous=True,update_hz=30)
     set_opacity(.2)
     return overlays

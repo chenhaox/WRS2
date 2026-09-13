@@ -4,7 +4,7 @@ from dataclasses import replace
 import numpy as np
 from wrs.assembly import (Assembly, AssemblyState, Part, MatingRelation, ContactConfig,
                           ContactAnalysis, analyze_contacts, build_contact_graph)
-from wrs.assembly.primitives import box, pose
+from wrs.assembly.geometry.primitives import box, pose
 
 
 def fixture():

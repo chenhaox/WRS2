@@ -10,7 +10,7 @@ sys.path.insert(0,str(ROOT))
 import numpy as np
 import scipy
 from wrs.assembly import Part, save_report
-from wrs.assembly.primitives import sphere, pose
+from wrs.assembly.geometry.primitives import sphere, pose
 from wrs.assembly.geometry.proximity import MeshProximity
 
 

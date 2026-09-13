@@ -45,4 +45,4 @@
 3. **多解与联合质量比较**：论文评分和多方向极限现已接入独立质量搜索；下一步输出多条经过 M3 检查的方案，按明确任务目标比较路程、资源和稳健性。不要把当前单一论文分数误称为 Pareto 或机器人执行最优。
 4. **旧数据迁移和 CAD/曲面升级**：显式导出可信 mesh/manifest/抓取，不执行未知 pickle；建立同几何、同质量和同摩擦的比较，再增加 B-Rep 与曲面连续配合证据。
 
-参考实现入口：[新序列](../../wrs/assembly/sequence.py)、[新机器人执行](../../wrs/assembly/execution.py)、[新方向承载](../../wrs/assembly/stability_sweep.py)。旧源文件位于前述同 commit 本地副本的 `asp/sysplanner.py:106,330,473`、`asp/utils.py:1230,1333` 和 `asp/stabilitylib/stability.py:212,262,330`。
+参考实现入口：[新序列](../../wrs/assembly/planning/sequence.py)、[新机器人执行](../../wrs/assembly/robotics/execution.py)、[新方向承载](../../wrs/assembly/mechanics/stability_sweep.py)。旧源文件位于前述同 commit 本地副本的 `asp/sysplanner.py:106,330,473`、`asp/utils.py:1230,1333` 和 `asp/stabilitylib/stability.py:212,262,330`。

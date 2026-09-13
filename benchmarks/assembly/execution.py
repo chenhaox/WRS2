@@ -48,7 +48,7 @@ def main():
         if name=='stack': save_assembly(assembly,output/'stack_manifest.json')
     if ROBOT or AUXILIARY:
         from examples.assembly._shared.robot import make_demo
-        from wrs.assembly.execution import validate_execution
+        from wrs.assembly.robotics.execution import validate_execution
         for auxiliary in ([False,True] if AUXILIARY else [False]):
             assembly,cell=make_demo(auxiliary)
             supports=() if not auxiliary else (AuxiliarySupport('aux_arm',SupportCandidate(

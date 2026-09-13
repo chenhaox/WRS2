@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from benchmarks.assembly._candidate_fixtures import fixtures
 from wrs.assembly import ContactConfig, analyze_contacts, build_contact_graph
-from wrs.assembly import constraints as module
+from wrs.assembly.motion import constraints as module
 from wrs.assembly.model import to_dict
 
 

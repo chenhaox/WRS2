@@ -9,7 +9,7 @@ from wrs.assembly import (Assembly, Part, MatingRelation, ContactConfig, Contact
                           candidate_motions, rebase_twist)
 from wrs.assembly.contact.graph import state_geometry_binding
 from wrs.assembly.model import digest
-from wrs.assembly.primitives import box, cylinder, pose
+from wrs.assembly.geometry.primitives import box, cylinder, pose
 
 
 def planar_scene():

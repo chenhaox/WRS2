@@ -43,6 +43,6 @@
 
 ## 交接记录
 
-已交付 `wrs/assembly/stability.py`、13 项静力测试及 `examples/assembly/stability_demo.py`。每个自由体单独平衡；成对内力、共同作用点、16 边内接摩擦锥、稀疏 HiGHS、有限 patch/辅助支撑能力均实现。孔内不放力点；near/unknown 不承载；名义平衡与声明扰动分别报告。辅助支撑只证明声明候选集内的需求，不证明机器人可执行。
+已交付 `wrs/assembly/mechanics/equilibrium.py`、13 项静力测试及 `examples/assembly/stability_demo.py`。每个自由体单独平衡；成对内力、共同作用点、16 边内接摩擦锥、稀疏 HiGHS、有限 patch/辅助支撑能力均实现。孔内不放力点；near/unknown 不承载；名义平衡与声明扰动分别报告。辅助支撑只证明声明候选集内的需求，不证明机器人可执行。
 
 `input_digest` 包含完整 contact graph、几何/状态、质量/COM/摩擦、重力、配置和载荷，尚无结果缓存。静力热调用中位数：两层堆叠约 3.50 ms、悬空约 2.17 ms，不含接触提取。下一项为 06 的有限运动。

@@ -176,10 +176,8 @@ _Directional disturbance limits, sharing one physical contact-force model._
   - methods: `analyze`
 
 ## `wrs.assembly.visualization.contact`
-_Evidence-only HTML previews and optional WRS scenes; no contact decisions._
+_Optional WRS contact scenes; rendering never makes contact decisions._
 
-- `preview_case(name, description, assembly, state, analysis)` — Make a JSON-compatible preview, with meshes at explicit world poses.
-- `write_contact_html(cases, path)` — Write a standalone orbitable preview, without network libraries/services.
 - `build_wrs_scene(assembly, state, analysis)` — Build a WRS scene lazily, with original meshes and evidence overlays.
 
 ## `wrs.assembly.geometry.transforms`

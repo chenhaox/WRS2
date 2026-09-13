@@ -9,7 +9,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'examples'/'assembly'))
 from wrs.assembly import Assembly,Part,ContactConfig,analyze_contacts,build_contact_graph,assembly_directions
-from wrs.assembly.primitives import box,pose
+from wrs.assembly.geometry.primitives import box,pose
 from wrs.assembly.geometry.preprocess import prepare_mesh
 from _shared.paper_cases import ASSETS,CATALOG,make_case,prefix_state
 from tools.assembly.paper_assets import _random_parts,mesh

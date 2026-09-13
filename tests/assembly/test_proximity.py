@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from wrs.assembly import MeshData, Part, GeometryConfig
-from wrs.assembly.primitives import box, rectangle, pose, combine
+from wrs.assembly.geometry.primitives import box, rectangle, pose, combine
 from wrs.assembly.geometry.mesh_bvh import closest_on_triangle, triangle_pair
 from wrs.assembly.geometry.proximity import MeshProximity
 from wrs.assembly.geometry.transforms import rotation_xyz

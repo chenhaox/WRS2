@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from wrs.assembly import Part, ContactConfig, MeshData, analyze_pair
-from wrs.assembly.primitives import box, rectangle, rectangular_ring, pose, combine
+from wrs.assembly.geometry.primitives import box, rectangle, rectangular_ring, pose, combine
 from wrs.assembly.geometry.transforms import rotation_xyz
 
 

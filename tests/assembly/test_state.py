@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from wrs.assembly import Assembly, AssemblyState, Part, MatingRelation, analyze_contacts
-from wrs.assembly.primitives import box, pose
+from wrs.assembly.geometry.primitives import box, pose
 from wrs.assembly.geometry.proximity import MeshProximity
 
 

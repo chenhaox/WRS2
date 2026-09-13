@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 from wrs.assembly import Assembly, MeshData, Part, load_assembly, save_assembly
 from wrs.assembly.io import read_mesh
-from wrs.assembly.primitives import box, pose
+from wrs.assembly.geometry.primitives import box, pose
 from wrs.assembly.geometry.transforms import rotation_xyz
 
 
@@ -91,7 +91,7 @@ import wrs.assembly as assembly_api
 for name in assembly_api.__all__:
     getattr(assembly_api, name)
 from wrs.assembly.adapters import wrs_scene
-from wrs.assembly.primitives import box, pose
+from wrs.assembly.geometry.primitives import box, pose
 result=analyze_pair(Part('a',box()),pose(),Part('b',box()),pose((0,0,.1)))
 assert any(p.classification=='active' for p in result.patches)
 assert 'wrs.viewer.world' not in sys.modules

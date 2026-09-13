@@ -3,9 +3,9 @@ import unittest
 import numpy as np
 from scipy.spatial.transform import Rotation
 from wrs.assembly import Assembly,Part,AssemblyState,analyze_contacts,build_contact_graph
-from wrs.assembly.primitives import box,pose,cylinder
+from wrs.assembly.geometry.primitives import box,pose,cylinder
 from wrs.assembly.model import digest
-from wrs.assembly.part_motion import (MotionConfig,ContactPolicy,plan_removal,validate_object_path,
+from wrs.assembly.motion.part_motion import (MotionConfig,ContactPolicy,plan_removal,validate_object_path,
                                        interpolate_pose,RemovalAction)
 
 

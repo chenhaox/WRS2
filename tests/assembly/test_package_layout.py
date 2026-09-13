@@ -1,37 +1,34 @@
-"""Guard import compatibility, portable previews and native paper inputs."""
+"""Guard the public API, WRS scene construction and native paper inputs."""
 
 from importlib import import_module
-from pathlib import Path
 import subprocess
 import sys
-import tempfile
-import tomllib
 import unittest
 
 import numpy as np
 
 
 class PackageLayoutTests(unittest.TestCase):
-    def test_previous_imports_share_modules_and_caches(self):
+    def test_public_api_uses_classified_implementations(self):
+        import wrs.assembly as assembly
+
         modules = {
-            "constraints": "motion.constraints",
-            "directions": "motion.directions",
-            "part_motion": "motion.part_motion",
-            "stability": "mechanics.equilibrium",
-            "stability_sweep": "mechanics.stability_sweep",
-            "force_points": "mechanics.force_points",
-            "sequence": "planning.sequence",
-            "quality": "planning.quality",
-            "quality_search": "planning.quality_search",
-            "execution": "robotics.execution",
-            "graspability": "robotics.graspability",
-            "primitives": "geometry.primitives",
+            "contact_constraints": "motion.constraints",
+            "solve_directions": "motion.directions",
+            "plan_removal": "motion.part_motion",
+            "check_equilibrium": "mechanics.equilibrium",
+            "DirectionalStabilityAnalyzer": "mechanics.stability_sweep",
+            "plan_sequence": "planning.sequence",
+            "score_assemblability": "planning.quality",
+            "plan_quality_sequence": "planning.quality_search",
+            "validate_execution": "robotics.execution",
+            "GraspabilityAnalyzer": "robotics.graspability",
         }
-        for old, new in modules.items():
-            with self.subTest(module=old):
+        for name, module in modules.items():
+            with self.subTest(name=name):
                 self.assertIs(
-                    import_module(f"wrs.assembly.{old}"),
-                    import_module(f"wrs.assembly.{new}"),
+                    getattr(assembly, name),
+                    getattr(import_module(f"wrs.assembly.{module}"), name),
                 )
 
     def test_native_paper_inputs_preserve_all_supported_scenes(self):
@@ -83,19 +80,22 @@ assert make_case('fig08_soma3', nominal=False).parts
         result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_preview_template_is_declared_and_loads_from_new_package(self):
-        from wrs.assembly.visualization import write_contact_html
+    def test_wrs_scene_contains_parts_and_contact_overlay(self):
+        from wrs.assembly import Assembly, Part, analyze_contacts
+        from wrs.assembly.geometry.primitives import box, pose
+        from wrs.assembly.visualization import build_wrs_scene
 
-        root = Path(__file__).resolve().parents[2]
-        config = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-        resources = config["tool"]["setuptools"]["package-data"]
-        self.assertIn("_contact_viewer.html", resources["wrs.assembly.visualization"])
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "contacts.html"
-            write_contact_html([{"name": "fixture <tag>", "meshes": [], "analysis": {}}], path)
-            html = path.read_text(encoding="utf-8")
-        self.assertIn("fixture \\u003ctag>", html)
-        self.assertNotIn("__ASSEMBLY_DATA__", html)
+        assembly = Assembly(
+            (
+                Part("base", box((0.1, 0.1, 0.1)), pose(), fixed=True),
+                Part("top", box((0.1, 0.1, 0.1)), pose((0, 0, 0.1))),
+            )
+        )
+        state = assembly.initial_state()
+        analysis = analyze_contacts(assembly, state)
+        self.assertTrue(analysis.patches)
+        scene = build_wrs_scene(assembly, state, analysis)
+        self.assertGreater(len(tuple(scene)), len(assembly.parts))
 
 
 if __name__ == "__main__":

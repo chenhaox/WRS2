@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from wrs.assembly import (StabilityConfig, ExternalWrench, LoadCase, SupportCandidate,
                           check_equilibrium, find_support_requirements)
-import wrs.assembly.stability as stability
+import wrs.assembly.mechanics.equilibrium as stability
 from wrs.assembly.contact.graph import ContactGraph
 from examples.assembly._shared.stability_cases import make_case
 

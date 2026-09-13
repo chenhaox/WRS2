@@ -17,7 +17,7 @@
 | 可视化 | 一张三维力方向球，混合模式丢失力矩方向和幅值比例 | 力与力矩两个三维投影，保留各半部的长度；选中项显示全部六个分量 |
 | 后端 | 默认 NumPy | 按本次要求默认 CUDA FP64 批量 LP；CPU 后端仍可显式选择 |
 
-API：`wrs/assembly/stability_sweep.py`。输出版本升为 `wrs.assembly.stability_sweep/2`，摘要版本同时更新。旧 JSON 不应与新的采样指标直接混用。
+API：`wrs/assembly/mechanics/stability_sweep.py`。输出版本升为 `wrs.assembly.stability_sweep/2`，摘要版本同时更新。旧 JSON 不应与新的采样指标直接混用。
 
 ## 2. 究竟在哪里采样
 

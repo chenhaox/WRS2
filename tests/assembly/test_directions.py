@@ -12,7 +12,7 @@ from scipy.spatial.transform import Rotation
 from wrs.assembly import (Assembly, Part, ContactConfig, DirectionConfig,
                           fibonacci_directions, solve_directions, assembly_directions,
                           analyze_contacts, build_contact_graph)
-from wrs.assembly.primitives import box, pose
+from wrs.assembly.geometry.primitives import box, pose
 from wrs.assembly.model import to_dict
 
 

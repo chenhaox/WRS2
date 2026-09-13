@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from scipy.spatial.transform import Rotation
 from wrs.assembly import Part,Assembly,AssemblyState
-from wrs.assembly.primitives import box,pose
+from wrs.assembly.geometry.primitives import box,pose
 from wrs.assembly.adapters.wrs_scene import (part_from_scene_object,scene_object_from_part,
                                             apply_state_to_scene,rigid_tf_from_wrs)
 

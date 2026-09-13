@@ -1,7 +1,7 @@
 """Stable direction fixtures for comparing complete production API costs."""
 import numpy as np
 from wrs.assembly import Assembly, Part, analyze_contacts, build_contact_graph, contact_constraints
-from wrs.assembly.primitives import box, cylinder, pose
+from wrs.assembly.geometry.primitives import box, cylinder, pose
 from examples.assembly._shared.contact_display import contact_layers
 
 

@@ -11,9 +11,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "examples" / "assem
 from _shared.stability_cases import make_case, case_supports
 from _shared.robot import make_demo
 from wrs.assembly import QualityTransition, StepQuality, quality_depth_first
-from wrs.assembly.execution import validate_execution
+from wrs.assembly.robotics.execution import validate_execution
 from wrs.assembly.model import digest
-from wrs.assembly.sequence import (
+from wrs.assembly.planning.sequence import (
     AuxiliarySupport,
     SequenceConfig,
     SequenceEvaluator,
@@ -110,7 +110,7 @@ class PlannerContractTests(unittest.TestCase):
             )
         saved_rng = np.random.get_state()
         with patch(
-            "wrs.assembly.execution._PolicyCollider.is_collided",
+            "wrs.assembly.robotics.execution._PolicyCollider.is_collided",
             side_effect=RuntimeError("injected collision-query failure"),
         ):
             with self.assertRaisesRegex(RuntimeError, "injected collision-query failure"):

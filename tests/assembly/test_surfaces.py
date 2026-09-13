@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from wrs.assembly import MeshData, GeometryConfig
-from wrs.assembly.primitives import box, rectangular_ring, cylinder
+from wrs.assembly.geometry.primitives import box, rectangular_ring, cylinder
 from wrs.assembly.geometry.preprocess import prepare_mesh
 from wrs.assembly.geometry.surfaces import extract_surfaces
 from wrs.assembly.geometry.planar import polygon_measure

@@ -23,9 +23,6 @@ dependencies = [
 [tool.setuptools.packages.find]
 include = ['one*', 'wrs*']
 
-[tool.setuptools.package-data]
-'wrs.assembly.visualization' = ['_contact_viewer.html']
-
 [project.optional-dependencies]
 assembly-sdf = ['open3d>=0.19']
 assembly-planning = ['clarabel>=0.11.1']

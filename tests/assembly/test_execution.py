@@ -7,7 +7,7 @@ import numpy as np
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'examples'/'assembly'))
 from _shared.robot import make_demo
 from wrs.assembly import AuxiliarySupport,SupportCandidate,plan_sequence
-from wrs.assembly.execution import (validate_execution,replay_execution,ExecutionArm,
+from wrs.assembly.robotics.execution import (validate_execution,replay_execution,ExecutionArm,
                                     generate_execution_grasps,_PolicyCollider,ExecutionConfig)
 
 

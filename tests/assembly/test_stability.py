@@ -10,7 +10,7 @@ from wrs.assembly import (Assembly, Part, AssemblyState, Region, ContactPatch, C
                           check_equilibrium, find_support_requirements, analyze_contacts, build_contact_graph)
 from wrs.assembly.contact.graph import state_geometry_binding
 from wrs.assembly.model import digest, to_dict
-from wrs.assembly.primitives import box, pose
+from wrs.assembly.geometry.primitives import box, pose
 
 
 def scene(*, mass=1., friction=.5, floor=True, com=(0,0,0), floor_width=.3):
@@ -165,11 +165,11 @@ class StabilityTests(unittest.TestCase):
     def test_solver_failure_is_unknown_and_inputs_are_checked(self):
         a,s = scene(); graph = graph_for(a,s)
         failure = SimpleNamespace(success=False,status=4,message='numerical failure')
-        with patch('wrs.assembly.stability.linprog',return_value=failure):
+        with patch('wrs.assembly.mechanics.equilibrium.linprog',return_value=failure):
             self.assertEqual(check_equilibrium(a,s,graph).status,'unknown')
         def nonfinite(c, **kwargs):
             return SimpleNamespace(success=True,status=0,message='bad numeric result',x=np.full(len(c),np.nan))
-        with patch('wrs.assembly.stability.linprog',side_effect=nonfinite):
+        with patch('wrs.assembly.mechanics.equilibrium.linprog',side_effect=nonfinite):
             self.assertEqual(check_equilibrium(a,s,graph).status,'unknown')
         for kwargs in ({'friction_sides':3},{'force_tol_n':0},{'max_contact_normal_force_n':float('inf')}):
             with self.assertRaises(ValueError): StabilityConfig(**kwargs)

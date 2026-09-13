@@ -6,7 +6,7 @@
 
 ## 当前实现算的是什么
 
-入口为 `wrs/assembly/constraints.py` 的 `contact_constraints` 和 `candidate_motions`。结果是**已报告接触约束下的局部非零运动候选**，并非完整插入路径，也没有实现论文的 assemblability 分数。
+入口为 `wrs/assembly/motion/constraints.py` 的 `contact_constraints` 和 `candidate_motions`。结果是**已报告接触约束下的局部非零运动候选**，并非完整插入路径，也没有实现论文的 assemblability 分数。
 
 设 A 固定，B 移动，接触法线 n_i 为 A 的外法线，指向 B 所在侧。纯平移 d 在接触处满足一阶不穿透条件：
 

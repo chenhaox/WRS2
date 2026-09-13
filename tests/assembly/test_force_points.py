@@ -14,7 +14,7 @@ from wrs.assembly import (ContactPatch,ContactAnalysis,Region,StabilityConfig,Ex
                           LoadCase,check_equilibrium,build_contact_graph)
 from wrs.assembly.model import digest
 from wrs.assembly.contact.graph import state_geometry_binding
-from wrs.assembly.force_points import prepare_force_points
+from wrs.assembly.mechanics.force_points import prepare_force_points
 
 
 def patch_with(points,normals=None,dimension=2,cells=None):

@@ -37,7 +37,7 @@ from wrs.assembly import (
     ContactModel, ContactAnalyzer, ContactConfig,
     SDFContactBackend, SDFConfig,
 )
-from wrs.assembly.primitives import cylinder, pose
+from wrs.assembly.geometry.primitives import cylinder, pose
 
 tube = ContactModel(
     cylinder(radius=.015, inner_radius=.010, height=.020, sections=32),

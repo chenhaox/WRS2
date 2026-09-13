@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 from wrs.assembly import (ContactModel, ContactAnalyzer, MeshContactBackend, ContactAnalysis,
                           Assembly, AssemblyState, Part, analyze_pair, analyze_contacts)
-from wrs.assembly.primitives import box, pose
+from wrs.assembly.geometry.primitives import box, pose
 
 
 class BackendContractTests(unittest.TestCase):

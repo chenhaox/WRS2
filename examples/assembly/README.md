@@ -24,6 +24,8 @@
 
 论文输入保留在 [assets/paper2021](assets/paper2021/README.md)，包含原始文件、哈希和名义几何校正说明；缺少原数据的替代场景仍有明确标注。
 
-[benchmarks/assembly](../../benchmarks/assembly/README.md) 单独存放计时、收敛、批量论文检查。唯一保留的独立 HTML 生成器是 `sdf_resolution.py`：比较不同 SDF 分辨率，可将顶部 `EXPORT_HTML` 设为 `True`；结果写到仓库根目录 `benchmark_results/assembly/`。
+[benchmarks/assembly](../../benchmarks/assembly/README.md) 单独存放计时、收敛、批量论文检查，数值报告写到仓库根目录 `benchmark_results/assembly/`。独立 HTML 生成器已删除，接触、碰撞和稳定性都使用 WRS 可视化。
+
+接触面显示、稳定性力点约简、floating 辅助支撑，以及求解点／摩擦锥／力箭头的显示开关使用 Checkbox。零件不透明度滑块支持拖动时实时更新；场景、零件和算法选择仍使用下拉菜单。
 
 清单规划和旧数据盘点属于工具，分别在 [tools/assembly/plan_manifest.py](../../tools/assembly/plan_manifest.py)、[legacy_inventory.py](../../tools/assembly/legacy_inventory.py)，保留它们所需的 CLI。算法说明与历史测量见 [assembly 文档](../../docs/assembly_planner/README.zh.md)。

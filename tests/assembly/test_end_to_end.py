@@ -5,7 +5,7 @@ import sys
 import tempfile
 import unittest
 from wrs.assembly import save_assembly
-from wrs.assembly.primitives import box,pose
+from wrs.assembly.geometry.primitives import box,pose
 from wrs.assembly import Assembly,Part
 
 
@@ -20,7 +20,7 @@ def guarded(name,*args,**kwargs):
     return original(name,*args,**kwargs)
 builtins.__import__=guarded
 from wrs.assembly import Assembly,Part,plan_sequence,replay_sequence
-from wrs.assembly.primitives import box,pose
+from wrs.assembly.geometry.primitives import box,pose
 a=Assembly((Part('base',box((.2,.2,.02)),pose((0,0,-.01)),fixed=True,friction=.5),
             Part('part',box((.02,.02,.02)),pose((0,0,.01)),mass_kg=.1,com_local_m=(0,0,0),friction=.5)))
 p=plan_sequence(a)

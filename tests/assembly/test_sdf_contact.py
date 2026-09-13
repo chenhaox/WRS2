@@ -5,7 +5,7 @@ from dataclasses import replace
 import numpy as np
 from wrs.assembly import (ContactModel, ContactAnalyzer, ContactConfig, SDFContactBackend,
                           SDFConfig, GridSDF, MeshData)
-from wrs.assembly.primitives import box, cylinder, rectangle, pose
+from wrs.assembly.geometry.primitives import box, cylinder, rectangle, pose
 
 
 def plane_grid(direction=1, offset=0):

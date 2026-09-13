@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
 import numpy as np
 from wrs.assembly import Part,ContactConfig,save_report
-from wrs.assembly.primitives import cylinder,pose
+from wrs.assembly.geometry.primitives import cylinder,pose
 from wrs.assembly.geometry.proximity import MeshProximity
 from wrs.assembly.geometry.mesh_bvh import QueryBudget
 from wrs.assembly.contact.mesh import analyze_mesh_pair

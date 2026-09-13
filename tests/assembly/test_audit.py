@@ -5,7 +5,7 @@ from dataclasses import replace
 import numpy as np
 from wrs.assembly import (MeshData, GeometryConfig, ContactModel, SDFConfig,
                           SDFContactBackend, SDFCollisionChecker)
-from wrs.assembly.primitives import box, rectangle, rectangular_ring, pose
+from wrs.assembly.geometry.primitives import box, rectangle, rectangular_ring, pose
 from wrs.assembly.geometry.preprocess import prepare_mesh
 from wrs.assembly.geometry.planar import cell_regions, polygon_measure
 

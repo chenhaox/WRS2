@@ -9,9 +9,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from wrs.assembly import Assembly, ContactAnalyzer, SDFContactBackend, SDFConfig, save_report
-from wrs.assembly.visualization import preview_case, write_contact_html
-from examples.assembly._shared.stl_cases import make_case, FILES
+from wrs.assembly import ContactAnalyzer, SDFContactBackend, SDFConfig, save_report
+from examples.assembly._shared.stl_cases import make_case
 
 
 # 直接修改参数；报告只写到仓库根目录的 benchmark_results/。
@@ -20,17 +19,15 @@ RESOLUTION_MM = [1, .25, .1]
 REPEAT = 3
 PROFILE = False
 OUT_DIR = ROOT / "benchmark_results" / "assembly" / "sdf_resolution"
-EXPORT_HTML = False  # True：生成有用的分辨率对照页，保存到 benchmark_results
 
 
 def main():
     if REPEAT < 1 or any(not np.isfinite(r) or r <= 0 for r in RESOLUTION_MM):
         raise ValueError('Repetitions and resolutions must be positive')
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    previews, rows = [], []
+    rows = []
     for key in CASES:
-        name, description, models, cfg = make_case(key)
-        assembly = Assembly(tuple(m.as_part() for m in models))
+        _, _, models, cfg = make_case(key)
         backend = SDFContactBackend(sdf_config=SDFConfig(open_surface='unsigned', max_query_points=2000000))
         for model in models:
             backend.prepare(model)
@@ -51,12 +48,6 @@ def main():
             rows.append(row)
             print(f"{key} resolution={resolution}mm median={row['median_s']:.4f}s areas={row['areas_mm2']}", flush=True)
             save_report(result, OUT_DIR/f'{key}.{resolution:g}mm.contacts.json')
-            if EXPORT_HTML:
-                preview = preview_case(f'{name} / {resolution:g} mm',
-                                       description+f' 终止单元半径 {resolution:g} mm；near 与法向阈值保持不变。',
-                                       assembly, assembly.initial_state(), result)
-                preview['benchmark'] = {'warm_median_s': row['median_s']}
-                previews.append(preview)
             save_report({'python': sys.executable, 'scope': 'warm full analysis; excludes loading, rendering and profiler overhead',
                          'results': rows}, OUT_DIR/'measurements.json')
             if PROFILE:
@@ -64,8 +55,6 @@ def main():
                 profiler.runcall(analyzer.analyze, models)
                 with (OUT_DIR/f'{key}.{resolution:g}mm.profile.txt').open('w', encoding='utf-8') as stream:
                     pstats.Stats(profiler, stream=stream).strip_dirs().sort_stats('cumulative').print_stats(50)
-    if EXPORT_HTML:
-        write_contact_html(previews, OUT_DIR/'contacts.html')
 
 
 if __name__ == '__main__':

@@ -6,14 +6,14 @@ import numpy as np
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'examples'/'assembly'))
 from _shared.stability_cases import make_case,case_supports
 from wrs.assembly.model import AssemblyState,digest
-from wrs.assembly.sequence import (plan_sequence,replay_sequence,SequenceConfig,HandlingCapability,AuxiliarySupport)
+from wrs.assembly.planning.sequence import (plan_sequence,replay_sequence,SequenceConfig,HandlingCapability,AuxiliarySupport)
 
 
 class SequenceTests(unittest.TestCase):
     def test_dfs_resumes_untried_siblings_after_a_dead_end(self):
         from types import SimpleNamespace
         from unittest.mock import patch
-        from wrs.assembly.sequence import SequenceEvaluator
+        from wrs.assembly.planning.sequence import SequenceEvaluator
         a,s,g=make_case('stack'); cfg=SequenceConfig(); oracle=SequenceEvaluator(a,cfg)
         trace=[]
         def evaluate(state,active,pid):
@@ -21,7 +21,7 @@ class SequenceTests(unittest.TestCase):
             if 'upper' not in state.poses and pid=='lower': return None,{'reason':'test_dead_end'}
             after=AssemblyState({k:v for k,v in state.poses.items() if k!=pid})
             return SimpleNamespace(after=after,supports_after=(),cost=1.,part_id=pid),None
-        with patch.object(oracle,'evaluate',side_effect=evaluate),patch('wrs.assembly.sequence.replay_sequence',return_value={'status':'valid'}):
+        with patch.object(oracle,'evaluate',side_effect=evaluate),patch('wrs.assembly.planning.sequence.replay_sequence',return_value={'status':'valid'}):
             p=plan_sequence(a,s,config=cfg,evaluator=oracle)
         self.assertEqual(p.status,'success')
         self.assertEqual([st.part_id for st in p.removal_steps],['lower','upper'])

@@ -5,7 +5,7 @@ from dataclasses import replace
 from unittest.mock import patch
 import numpy as np
 from wrs.assembly import ContactModel, SDFCollisionChecker
-from wrs.assembly.primitives import box, cylinder, sphere, rectangle, pose
+from wrs.assembly.geometry.primitives import box, cylinder, sphere, rectangle, pose
 
 
 @unittest.skipUnless(importlib.util.find_spec('open3d'), 'optional open3d is absent')

@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from wrs.assembly import Part, MeshData, GeometryConfig, ContactConfig, analyze_pair
-from wrs.assembly.primitives import sphere, rectangle, cylinder, pose, box
+from wrs.assembly.geometry.primitives import sphere, rectangle, cylinder, pose, box
 from wrs.assembly.geometry.proximity import MeshProximity
 from wrs.assembly.geometry.mesh_bvh import QueryBudget
 from wrs.assembly.contact.mesh import analyze_mesh_pair

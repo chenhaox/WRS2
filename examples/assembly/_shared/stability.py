@@ -62,13 +62,13 @@ def show(case="bridge", *, port=8893, reduce_contact_points=True, aux_supports=T
     panel = base.ui.add_panel('scenario',title='稳定性案例',anchor=Anchor.BOTTOM_LEFT,
                               width=250,offset=16,font_size=12)
     panel.add_select('case',label='切换案例',options=list(DESCRIPTIONS),value=case,on_change=show_case)
-    def change_option(key,value):
-        settings[key] = value=='开启'
+    def change_option(key: str, value: bool) -> None:
+        settings[key] = value
         show_case(settings['case'])
-    panel.add_select('reduce',label='约简力点',options=['开启','关闭'],
-        value='开启' if settings['reduce'] else '关闭',on_change=lambda v:change_option('reduce',v))
+    panel.add_checkbox('reduce',label='约简力点',value=settings['reduce'],
+                       on_change=lambda v:change_option('reduce',v))
     panel.add_label('clean',label='清理规则',value='重复点始终清理；关闭约简可保留其余原始力点。')
-    panel.add_select('supports',label='floating 辅助支撑',options=['开启','关闭'],
-        value='开启' if settings['supports'] else '关闭',on_change=lambda v:change_option('supports',v))
+    panel.add_checkbox('supports',label='floating 辅助支撑',value=settings['supports'],
+                       on_change=lambda v:change_option('supports',v))
     show_case(case)
     base.run()

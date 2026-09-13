@@ -39,7 +39,7 @@
 
 ## 交接记录
 
-已实现不可变模型、`wrs.assembly/1` 输入、`wrs.assembly.contact/1` 输出、显式单位/姿态、原始 STL 读取、旧 loader 的 `Rz @ Ry @ Rx` 映射、根包延迟导入。fixture 统一在 `wrs/assembly/primitives.py`，供测试与示例共享。
+已实现不可变模型、`wrs.assembly/1` 输入、`wrs.assembly.contact/1` 输出、显式单位/姿态、原始 STL 读取、旧 loader 的 `Rz @ Ry @ Rx` 映射、根包延迟导入。fixture 统一在 `wrs/assembly/geometry/primitives.py`，供测试与示例共享。
 
 `test_io.py` 5 项、`test_state.py` 2 项通过。同一指定解释器子进程阻断物理/显示/CAD 模块后仍能分析。`from wrs import wvw, wsso, wssop, Grasp, MotionData` 导入通过；可选显示场景可构建，未启动 WRS hub/仿真。
 
