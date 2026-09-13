@@ -1,5 +1,7 @@
 # Assembly Planner 重构：implementation plan
 
+最新目录整理：[模块分类、contact 与 geometry 的区别、内部文件用途及旧数据一次性转换](../../wrs/assembly/README.md)。`adapters/legacy.py` 已移出运行库；论文例子直接加载新版装配数据。
+
 文件审查与类型标注：[哪些代码已清理、哪些模块保留，以及 adapter 的用途](package-cleanup.zh.md)。
 
 代码阅读入口：[搜索、安装／拆卸状态、静力方程与机器人执行流程](code-readability.zh.md)。本次整理保留公开 API、缓存和数值算法，将主流程与物理评估拆开，并提供固定输入的前后性能对照。

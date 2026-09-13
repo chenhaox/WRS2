@@ -2,7 +2,7 @@
 from pathlib import Path
 import numpy as np
 from wrs.assembly import ContactModel, ContactConfig
-from wrs.assembly.primitives import box, pose
+from wrs.assembly.geometry.primitives import box, pose
 
 ROOT = Path(__file__).resolve().parents[3]
 FILES = {'bunny': ('bunny.stl', 'Bunny / 170 mm'),

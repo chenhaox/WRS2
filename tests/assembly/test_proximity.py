@@ -4,7 +4,7 @@ from wrs.assembly import MeshData, Part, GeometryConfig
 from wrs.assembly.primitives import box, rectangle, pose, combine
 from wrs.assembly.geometry.mesh_bvh import closest_on_triangle, triangle_pair
 from wrs.assembly.geometry.proximity import MeshProximity
-from wrs.assembly.adapters.legacy import legacy_rotation
+from wrs.assembly.geometry.transforms import rotation_xyz
 
 
 class ProximityTests(unittest.TestCase):
@@ -30,7 +30,7 @@ class ProximityTests(unittest.TestCase):
         backend = MeshProximity()
         rng = np.random.default_rng(113)
         for translation in ((.13,.025,.03), (.06,.01,.02), (-.11,.08,.04)):
-            ta, tb = pose(), pose(translation, legacy_rotation(rng.uniform(-.4,.4,3)))
+            ta, tb = pose(), pose(translation, rotation_xyz(rng.uniform(-.4,.4,3)))
             result = backend.pair_distance(a, ta, b, tb)
             av, bv = mesh.vertices, mesh.vertices @ tb[:3,:3].T + tb[:3,3]
             expected = min(np.linalg.norm(p-q) for x in av[mesh.faces] for y in bv[mesh.faces]
@@ -44,7 +44,7 @@ class ProximityTests(unittest.TestCase):
         a, b = Part('outer',box()), Part('inner',box((.02,.02,.02)))
         self.assertEqual(backend.classify_overlap(a,pose(),b,pose()).status, 'penetrating')
         self.assertEqual(backend.classify_overlap(a,pose(),Part('same',box()),pose()).status, 'penetrating')
-        crossed = backend.classify_overlap(a,pose(),Part('cross',box()),pose((.06,0,0),legacy_rotation([.1,.2,.3])))
+        crossed = backend.classify_overlap(a,pose(),Part('cross',box()),pose((.06,0,0),rotation_xyz([.1,.2,.3])))
         self.assertEqual(crossed.status, 'penetrating')
         self.assertIsNotNone(crossed.witness_world_m)
         self.assertEqual(backend.classify_overlap(a,pose(),Part('open',rectangle()),pose()).status, 'unknown')
@@ -64,7 +64,7 @@ class ProximityTests(unittest.TestCase):
         self.assertEqual(q.status, 'complete')
         self.assertEqual(q.triangle_tests, 1)
         self.assertAlmostEqual(q.lower_bound_m, .1)
-        tilted = pose((.02, .01, .2), legacy_rotation([.1, .2, .3]))
+        tilted = pose((.02, .01, .2), rotation_xyz([.1, .2, .3]))
         reference = backend.pair_distance(a, pose(), b, tilted)
         q = backend.pair_distance(a, pose(), b, tilted, budget=1)
         self.assertEqual(q.status, 'budget_exhausted')

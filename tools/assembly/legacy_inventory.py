@@ -7,7 +7,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
 from wrs.assembly import save_report, save_assembly
-from wrs.assembly.adapters.legacy import legacy_asset_inventory, load_legacy_assembly
+from tools.assembly.legacy_data import legacy_asset_inventory, load_legacy_assembly
 
 
 def main():

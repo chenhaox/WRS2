@@ -1,7 +1,7 @@
 """Nine contact-cone cases constructed from real box/fixture meshes."""
 import numpy as np
 from wrs.assembly import Assembly, Part
-from wrs.assembly.primitives import box, pose
+from wrs.assembly.geometry.primitives import box, pose
 
 # Rows describe fixture placement only. The solver receives normals extracted
 # from actual contact regions, independently of this expected-value table.

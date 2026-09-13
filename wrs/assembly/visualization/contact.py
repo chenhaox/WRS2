@@ -8,7 +8,7 @@ from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .model import Assembly, AssemblyState, ContactAnalysis, to_dict
+from ..model import Assembly, AssemblyState, ContactAnalysis, to_dict
 
 if TYPE_CHECKING:
     from wrs.scene.scene import Scene

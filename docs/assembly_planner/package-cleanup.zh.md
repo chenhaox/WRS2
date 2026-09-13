@@ -1,5 +1,7 @@
 # wrs/assembly 文件审查与类型标注
 
+后续调整见[新的包目录说明](../../wrs/assembly/README.md)：本页记录第一轮审查；随后已将旧数据转换移到 tools、导出新版论文装配数据并删除运行库 legacy adapter。下面“保留 legacy”的结论仅对应迁移前状态。
+
 2026-09-13，基线 26b3651。审查范围包括 wrs/assembly 的 42 个 Python 文件及 HTML 资源，并检查了 wrs、examples、tests、benchmarks、tools 和公开 API 文档中的引用。动态导出、协议、按文件名读取的资源也计入用途。
 
 ## 删除了什么

@@ -1,7 +1,7 @@
 """Sequence scenes with explicit masses, friction and metre-scale geometry."""
 from .stability_cases import make_case as stability_case, block, case_supports
 from wrs.assembly import Assembly, Part, analyze_contacts, build_contact_graph
-from wrs.assembly.primitives import cylinder, pose
+from wrs.assembly.geometry.primitives import cylinder, pose
 
 DESCRIPTIONS = {
     'stack': '两层堆叠，2 个活动零件。',

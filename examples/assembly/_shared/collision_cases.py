@@ -2,7 +2,7 @@
 from pathlib import Path
 import numpy as np
 from wrs.assembly import ContactModel, MeshData
-from wrs.assembly.primitives import box, sphere, cylinder, pose
+from wrs.assembly.geometry.primitives import box, sphere, cylinder, pose
 ROOT = Path(__file__).resolve().parents[3]
 STLS = {'bunny': 'bunny.stl', 'flange': 'link6.stl', 'cylinder_stl': 'examples/l1picking/cylinder.stl',
         'gripper_finger': 'wrs/robots/end_effectors/openarm_gripper/meshes/finger.stl',

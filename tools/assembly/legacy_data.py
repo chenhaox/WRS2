@@ -8,23 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from numpy.typing import ArrayLike
 
-from ..io import read_mesh, unit_scale
-from ..model import Assembly, FloatArray, Part
-
-
-def legacy_rotation(rotation_rad: ArrayLike) -> FloatArray:
-    """Reproduce loader -> CMesh.RPY -> euler_matrix(sxyz): Rz @ Ry @ Rx."""
-    r = np.asarray(rotation_rad, dtype=float)
-    if r.shape != (3,) or not np.all(np.isfinite(r)):
-        raise ValueError("Legacy rotation must contain three finite radians")
-    cx, cy, cz = np.cos(r)
-    sx, sy, sz = np.sin(r)
-    rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
-    ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
-    rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
-    return rz @ ry @ rx
+from wrs.assembly.io import read_mesh, unit_scale
+from wrs.assembly.model import Assembly, Part
+from wrs.assembly.geometry.transforms import rotation_xyz
 
 
 def legacy_asset_inventory(
@@ -46,7 +33,7 @@ def legacy_asset_inventory(
         if not path.exists():
             path = path.with_name(model[0].lower() + model[1:] + ".stl")
         tf = np.eye(4)
-        tf[:3, :3] = legacy_rotation(value["rotation"])
+        tf[:3, :3] = rotation_xyz(value["rotation"])
         tf[:3, 3] = np.asarray(value["location"]) * scale
         entry = {
             "part_id": key,

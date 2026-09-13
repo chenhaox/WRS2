@@ -1,5 +1,7 @@
 # Assembly planner 代码阅读指南
 
+当前实现已按[功能目录](../../wrs/assembly/README.md)分类。下表链接直达实际实现；旧的顶层模块路径仍可通过兼容入口导入。
+
 后续清理：[文件用途、冗余代码删除、adapter 与核心类型标注](package-cleanup.zh.md)。
 
 这次整理集中在搜索、单步评估、静力平衡和机器人执行四个文件。公开入口、结果字段和搜索策略保留；内部状态改成具名对象，长流程按物理阶段拆分。NumPy 批量计算、稀疏矩阵、CUDA 批量 LP、接触和碰撞缓存继续复用。
@@ -8,11 +10,11 @@
 
 | 想了解什么 | 文件与入口 | 下一步 |
 |---|---|---|
-| 找到一条可行装配序列 | [sequence.py](../../wrs/assembly/sequence.py)：plan_sequence | SequenceEvaluator.evaluate，然后 replay_sequence |
-| 按 S/G/A 评分搜索序列 | [quality_search.py](../../wrs/assembly/quality_search.py)：plan_quality_sequence | _AssemblyQualityEvaluator.expand，然后 _QualityDepthFirstSearch.visit |
-| 单次静力平衡 | [stability.py](../../wrs/assembly/stability.py)：check_equilibrium | _collect_force_sites → _assemble_force_model → _solve_load_case |
-| 六维扰动承载极限 | [stability_sweep.py](../../wrs/assembly/stability_sweep.py)：DirectionalStabilityAnalyzer | 复用力模型，再调用 [_batched_lp.py](../../wrs/assembly/_batched_lp.py) |
-| WRS 机器人执行 | [execution.py](../../wrs/assembly/execution.py)：validate_execution | _ExecutionSession.run → _execute_step → replay_execution |
+| 找到一条可行装配序列 | [planning/sequence.py](../../wrs/assembly/planning/sequence.py)：plan_sequence | SequenceEvaluator.evaluate，然后 replay_sequence |
+| 按 S/G/A 评分搜索序列 | [planning/quality_search.py](../../wrs/assembly/planning/quality_search.py)：plan_quality_sequence | _AssemblyQualityEvaluator.expand，然后 _QualityDepthFirstSearch.visit |
+| 单次静力平衡 | [mechanics/equilibrium.py](../../wrs/assembly/mechanics/equilibrium.py)：check_equilibrium | _collect_force_sites → _assemble_force_model → _solve_load_case |
+| 六维扰动承载极限 | [mechanics/stability_sweep.py](../../wrs/assembly/mechanics/stability_sweep.py)：DirectionalStabilityAnalyzer | 复用力模型，再调用 [_batched_lp.py](../../wrs/assembly/mechanics/_batched_lp.py) |
+| WRS 机器人执行 | [robotics/execution.py](../../wrs/assembly/robotics/execution.py)：validate_execution | _ExecutionSession.run → _execute_step → replay_execution |
 | 运行与查看结果 | [WRS 例子](../../examples/assembly/README.md) | sequence.py、quality_sequence.py、robot_execution.py |
 
 建议按“公开入口 → 主流程 → 当前需要的物理检查”阅读。配置和不可变结果定义在各文件顶部；下划线开头的类、函数是内部实现，不需要在例子里手工创建。

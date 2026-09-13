@@ -103,4 +103,6 @@ site/
 # Reusable paper inputs and their provenance are source assets, not reports.
 !examples/assembly/assets/paper2021/provenance.json
 !examples/assembly/assets/paper2021/scenes/*.json
+!examples/assembly/assets/paper2021/assemblies/*.assembly.json
 !examples/assembly/assets/paper2021/README.md
+!wrs/assembly/README.md

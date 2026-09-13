@@ -2,8 +2,8 @@
 from dataclasses import replace
 import numpy as np
 from wrs.assembly import Assembly, Part, ContactConfig, ContactModel, GridSDF
-from wrs.assembly.primitives import box, rectangle, rectangular_ring, cylinder, sphere, pose
-from wrs.assembly.adapters.legacy import legacy_rotation
+from wrs.assembly.geometry.primitives import box, rectangle, rectangular_ring, cylinder, sphere, pose
+from wrs.assembly.geometry.transforms import rotation_xyz
 from .stl_cases import FILES, make_case as stl_case
 
 def cases():
@@ -23,7 +23,7 @@ def cases():
         'gap': ('0.5 μm 正间隙', '虽然间隙很小，默认仍是 near，active 面积为零；没有静默吸附。',
                 pair(box(),box(),pose((0,0,.1000005))), default, 0),
         'tilted': ('倾斜面的线接触', '绕 Y 轴旋转 0.02 rad；间隙沿平面变化。零间隙线、正间隙带和局部干涉分别记录。',
-                   pair(rectangle(),rectangle(upward=False),pose(rotation=legacy_rotation([0,.02,0]))), default, 0),
+                   pair(rectangle(),rectangle(upward=False),pose(rotation=rotation_xyz([0,.02,0]))), default, 0),
         'penetration': ('独立的穿透诊断', '两个箱体重叠 10 mm。实体诊断必须报告 penetrating，不能仅依据局部接触区域判断。',
                         pair(box(),box(),pose((0,0,.09))), default, 0),
         'sphere': ('球面与平面切触', '半径 25 mm 的离散球面与平面切触。显示的是 0.5 mm 近接触带估计，不能当成有限承载面积。',

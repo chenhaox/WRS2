@@ -8,7 +8,7 @@ import numpy as np
 from wrs.assembly import Assembly, MeshData, Part, load_assembly, save_assembly
 from wrs.assembly.io import read_mesh
 from wrs.assembly.primitives import box, pose
-from wrs.assembly.adapters.legacy import legacy_rotation
+from wrs.assembly.geometry.transforms import rotation_xyz
 
 
 class InputTests(unittest.TestCase):
@@ -75,7 +75,7 @@ class InputTests(unittest.TestCase):
             axis = np.asarray(axis)
             return v*np.cos(angle) + np.cross(axis, v)*np.sin(angle) + axis*np.dot(axis, v)*(1-np.cos(angle))
         expected = np.column_stack([rotate(rotate(rotate(v, [1,0,0], r), [0,1,0], p), [0,0,1], y) for v in basis])
-        np.testing.assert_allclose(legacy_rotation([r,p,y]), expected)
+        np.testing.assert_allclose(rotation_xyz([r,p,y]), expected)
 
     def test_headless_import_in_child(self):
         script = r'''
@@ -90,7 +90,7 @@ import wrs.assembly as assembly_api
 # Type-only WRS references must not pull rendering or simulation into imports.
 for name in assembly_api.__all__:
     getattr(assembly_api, name)
-from wrs.assembly.adapters import legacy, wrs_scene
+from wrs.assembly.adapters import wrs_scene
 from wrs.assembly.primitives import box, pose
 result=analyze_pair(Part('a',box()),pose(),Part('b',box()),pose((0,0,.1)))
 assert any(p.classification=='active' for p in result.patches)

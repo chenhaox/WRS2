@@ -2,7 +2,7 @@
 import numpy as np
 from wrs.assembly import (Assembly, Part, ExternalWrench, LoadCase, StabilityConfig,
                           SupportCandidate, analyze_contacts, build_contact_graph)
-from wrs.assembly.primitives import box, cylinder, pose
+from wrs.assembly.geometry.primitives import box, cylinder, pose
 
 
 DESCRIPTIONS = {

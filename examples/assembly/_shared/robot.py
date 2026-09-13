@@ -1,11 +1,11 @@
 """Declared single/dual-arm workcell and verified WRS execution replay."""
 import numpy as np
 from wrs.assembly import Assembly,Part
-from wrs.assembly.primitives import box,pose
-from wrs.assembly.sequence import plan_sequence,SequenceConfig
-from wrs.assembly.sequence import AuxiliarySupport
+from wrs.assembly.geometry.primitives import box,pose
+from wrs.assembly.planning.sequence import plan_sequence,SequenceConfig
+from wrs.assembly.planning.sequence import AuxiliarySupport
 from wrs.assembly import SupportCandidate
-from wrs.assembly.execution import ExecutionArm,ExecutionWorkcell,ExecutionConfig,validate_execution
+from wrs.assembly.robotics.execution import ExecutionArm,ExecutionWorkcell,ExecutionConfig,validate_execution
 
 
 def make_demo(auxiliary=False):

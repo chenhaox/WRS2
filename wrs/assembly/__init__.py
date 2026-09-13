@@ -28,40 +28,40 @@ __all__ = ['Assembly', 'AssemblyState', 'ContactAnalysis', 'ContactConfig',
 
 def __getattr__(name):
     if name in ('AssemblabilityScore', 'StepQuality', 'score_assemblability', 'sequence_quality', 'quality_upper_bound'):
-        from . import quality
+        from .planning import quality
         return getattr(quality,name)
     if name in ('GraspabilityConfig', 'GraspabilityResult', 'GraspabilityAnalyzer', 'check_force_closure'):
-        from . import graspability
+        from .robotics import graspability
         return getattr(graspability,name)
     if name in ('QualityTransition', 'QualitySearchConfig', 'QualitySequenceResult', 'quality_depth_first', 'plan_quality_sequence'):
-        from . import quality_search
+        from .planning import quality_search
         return getattr(quality_search,name)
     if name in ('StabilitySweepConfig', 'DirectionalLimit', 'StabilitySweepResult', 'DirectionalStabilityAnalyzer',
                 'disturbance_directions', 'analyze_directional_stability', 'limit_wrench'):
-        from . import stability_sweep
+        from .mechanics import stability_sweep
         return getattr(stability_sweep,name)
     if name in ('MotionConfig', 'RemovalAction', 'ContactPolicy', 'PathValidation', 'RemovalResult', 'validate_object_path', 'plan_removal', 'sample_path'):
-        from . import part_motion
+        from .motion import part_motion
         return getattr(part_motion,name)
     if name in ('HandlingCapability', 'AuxiliarySupport', 'SequenceConfig', 'SequenceStep', 'SequenceResult', 'SequenceEvaluator', 'plan_sequence', 'plan_assembly', 'replay_sequence'):
-        from . import sequence
+        from .planning import sequence
         return getattr(sequence,name)
     if name in ('ExecutionArm', 'ExecutionConfig', 'ExecutionWorkcell', 'ExecutionResult', 'generate_execution_grasps', 'validate_execution', 'replay_execution'):
-        from . import execution
+        from .robotics import execution
         return getattr(execution,name)
     if name in ('ExternalWrench', 'LoadCase', 'SupportCandidate', 'StabilityConfig', 'EquilibriumCase',
                 'EquilibriumResult', 'SupportSearchResult', 'check_equilibrium', 'find_support_requirements'):
-        from . import stability
+        from .mechanics import equilibrium as stability
         return getattr(stability, name)
     if name in ('DirectionConfig', 'DirectionResult', 'fibonacci_directions', 'solve_directions', 'assembly_directions'):
-        from . import directions
+        from .motion import directions
         return getattr(directions, name)
     if name in ('ContactGraph', 'build_contact_graph'):
         from .contact import graph
         return getattr(graph, name)
     if name in ('ConstraintConfig', 'LocalConstraints', 'MotionCandidates',
                 'contact_constraints', 'candidate_motions', 'rebase_twist'):
-        from . import constraints
+        from .motion import constraints
         return getattr(constraints, name)
     if name == 'ToleranceContactPolicy':
         from .contact.policy import ToleranceContactPolicy

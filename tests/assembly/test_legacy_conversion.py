@@ -1,4 +1,4 @@
-"""The legacy adapter is used by the migration CLI, outside the examples tree."""
+"""One-time old-data conversion lives in tools, outside the runtime library."""
 
 import json
 from pathlib import Path
@@ -7,7 +7,7 @@ import unittest
 
 import numpy as np
 
-from wrs.assembly.adapters.legacy import legacy_asset_inventory, load_legacy_assembly
+from tools.assembly.legacy_data import legacy_asset_inventory, load_legacy_assembly
 
 
 STL = """solid domino
