@@ -51,6 +51,7 @@ class UIPanel:
 
         Anchors are top-left, top-right, bottom-left and bottom-right.
         font_size is the base text size in CSS pixels, independent of width.
+        columns sets the grid width; buttons can opt into a column_span.
         closable adds a local hide button; movable enables header dragging.
         Explicit visible=True reopens locally closed panels. Omitted fields keep
         their current values; browser dragging/closing does not change Python state.
@@ -113,6 +114,8 @@ class UIPanel:
         repeat=True activates on press and repeats while held, capped at
         repeat_hz. shortcut is a single KeyboardEvent.key, e.g. 'w' or
         'ArrowRight'. Ordinary buttons still activate on click.
+        variant selects CSS appearance. column_span=None fills the panel width;
+        a positive span places buttons side by side within the panel's columns.
         """
         if not isinstance(repeat, bool):
             raise ValueError('repeat must be a bool')

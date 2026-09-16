@@ -53,23 +53,32 @@ collided = collider.is_collided(arm.qs)
 
 ## 用于 Citrus 交互仿真的支持范围
 
-`examples/agriculture/robot_citrus_interaction.py` 使用 **FAFURobotArm + FAFUGripper**，
-原生掌部和双指参与 MuJoCo 叶片/果实接触。夹爪保持配置中的固定开口（默认 50 mm）；
-不再使用蓝色圆头工具。原始 STL 和 WRS 物理转换器保持不变。
+`examples/agriculture/robot_citrus_interaction.py` uses **FAFURobotArm + FAFUGripper**
+with the original palm and finger meshes for MuJoCo leaf/fruit contact. The example
+starts at a 50 mm opening and drives both fingers with equal position targets.
+Its local `_ServoGripper` removes the kinematic mimic so each finger can follow
+its simulated contact response. The shared gripper and physics converter are unchanged.
 
-`FAFUGripper(fixed_opening=0.05)` 为该实例生成固定手指关节，保留同一套网格、碰撞与 TCP。
-其 `ndof=0`，`jaw_range=[0.05,0.05]`，不能在运行时改变开口；修改参数后重启场景。
-不传 `fixed_opening` 时仍是原来的可动运动学模型，`set_opening/open/close` 行为不变。
+`FAFUGripper(fixed_opening=0.05)` remains available for a rigid, zero-DOF gripper.
+Without that option, the shared gripper keeps its original kinematic mimic and
+`set_opening/open/close` API. The interactive example uses two independent finger
+DOFs, not a physical mimic constraint.
 
 ```powershell
 python -m examples.agriculture.robot_citrus_interaction
 python -m examples.agriculture.robot_citrus_interaction --headless --report fafu_contact.json
 ```
 
-UI 使用固定世界坐标的六向笛卡尔移动，默认每次 10 mm，工具朝向固定。
-使用 `NumIKSolver` 和明确的相邻初值检查短距离 waypoint，随后通过有速度限制的
-MuJoCo 位置伺服执行。越界/不可达/IK 跳变时拒绝整条新路径，保留旧目标。
-`Touch leaves`、`Touch orange_000`、撤回、暂停和复位均可使用。
+Hold W/A/S/D to jog in the world XY plane; Q/E move up/down. I/K, J/L and U/O
+rotate about world X, Y and Z at the TCP. The outlined buttons also repeat while
+held with the mouse. Sliders set the increments (10 mm and 2° by default).
+R/F open/close the gripper; Escape holds the current commands.
+
+`NumIKSolver` checks the full pose path with neighbouring seeds before applying
+it through rate-limited native position servos. A rejected path preserves the
+previous target. Held jogs stay at most one step ahead of the command; after
+release, the last step can finish. Touch, retract, pause and reset remain available.
+See [Viewer controls](viewer_ui.md#keypad-layout-and-styling) for the reusable UI options.
 
 | 模块 | 已有支持与当前限制 |
 | --- | --- |
@@ -80,9 +89,11 @@ MuJoCo 位置伺服执行。越界/不可达/IK 跳变时拒绝整条新路径�
 | 双指夹爪 | FK/mount/开口和碰撞规划可用；**物理 mimic 联动尚未接通**：当前转换器未输出 joint equality，装配体编译为 8 DOF、8 actuators、0 equality，而 WRS 夹爪运动学只有 1 个独立 DOF。不可直接据此宣称单驱动同步夹持仿真已完成。 |
 | 实机控制 | 本次迁移没有导入旧控制器，当前包没有对应的 FAFU 实机通信/执行接口。 |
 
-当前 Citrus 演示使用 6 个机械臂 actuator 和 19 个植物 passive DOF；固定开口夹爪无活动 DOF。
-模型可用于定性接触与路径探索；尚不支持真实硬件动力学预测、标定力控或物理双指抓取。
-后续实现物理开合需补通用 mimic→MuJoCo 约束/驱动映射，再标定连杆与驱动参数。
+The Citrus demo has 6 arm actuators, 2 finger actuators and 19 passive plant DOFs.
+Finger opening is limited to 40 mm/s, with a 20 N limit per finger; these are
+example settings, not calibrated hardware parameters. It supports qualitative
+contact and opening/closing. Physical mimic coupling and calibrated gripping
+forces remain outside this example.
 
 验证命令：
 

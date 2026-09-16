@@ -189,6 +189,46 @@ on the button and exposed through `aria-keyshortcuts`.
 Browser-only `Button` widgets use `onClick` with the same `repeat`, `repeat_hz`
 and `shortcut` options. Destroying a widget removes its keyboard listeners.
 
+### Keypad layout and styling
+
+Use `columns` for the panel grid and `column_span` for each button. Other controls
+and section headings keep the full width. Defaults (`columns=1`,
+`column_span=None`, `variant='default'`) keep the usual stacked layout.
+
+```python
+panel = base.ui.add_panel('jog', title='Jog', columns=3, width=280)
+panel.add_button('forward', label='Forward +Y', shortcut='w',
+                  repeat=True, repeat_hz=10, on_click=forward,
+                  column_span=1, variant='keycap')
+```
+
+`variant='keycap'` gives a button a dark outline, a large key hint and a small
+action label. `variant` only selects appearance via `data-variant` on the widget;
+callbacks, shortcuts and hold behavior are unchanged. Add a CSS selector such as
+`.wrs-ui-panel [data-variant='custom'] .ui-action` for another style, without
+changing the button class or transport. Keycap colors use `--ui-key-border` and
+`--ui-key-background`. Browser-only `Button` accepts the same options;
+`Panel({ columns: 3 })` sets its grid.
+
+For a working robot example, run:
+
+```sh
+python -m examples.agriculture.robot_citrus_interaction
+```
+
+Its move keys form two rows: **Q W E / A S D**. W/S move forward/back along Y,
+A/D move left/right along X, and Q/E move up/down along Z. Hold the mouse button
+or key to repeat at up to 10 Hz.
+I/K, J/L and U/O rotate about world X, Y and Z at the TCP. Sliders set the move
+and rotation increments. Each jog starts from the current command, keeping the
+target at most one step ahead; releasing stops repeats, and that last step can
+finish. R opens the gripper and F closes it; both move toward their target
+opening with a speed limit. Escape holds the current servo commands.
+
+The example uses two independent finger servos with matching targets, so contact
+can leave the fingers at different positions. This is an example controller,
+not a physical mimic constraint. The shared robot definition is unchanged.
+
 ## Slider updates
 
 Sliders default to `continuous=False`: dragging previews the value in the browser,
@@ -233,6 +273,7 @@ Pass these options to `add_panel()` or change them with `panel.configure(...)`:
 | `anchor` | `wvui.Anchor.TOP_RIGHT` | Also `TOP_LEFT`, `BOTTOM_LEFT`, `BOTTOM_RIGHT` |
 | `offset` | `24` | Distance from the anchored edges, in CSS pixels |
 | `width`, `height` | `296`, `None` | CSS pixels; `None` gives automatic height |
+| `columns` | `1` | Positive integer; buttons can share a row with `column_span` |
 | `font_size` | `13` | Base font size in CSS pixels; headings scale relative to it |
 | `closable` | `False` | Show a close button |
 | `movable` | `False` | Allow heading dragging within the viewport or container |

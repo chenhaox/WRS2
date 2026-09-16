@@ -396,9 +396,12 @@ def add_controls(base, demo):
                        repeat=True, repeat_hz=10, shortcut=shortcut,
                        on_click=lambda axis=axis, sign=sign: request(lambda: demo.jog(axis, sign * jog_step[0])))
 
+    def set_rotation_step(value):
+        rotation_step[0] = value
+
     arm.add_slider('rotation_step', label='Rotate per step', unit='°', min_value=1, max_value=10,
                    step=1, value=rotation_step[0], group='Rotate',
-                   on_change=lambda value: rotation_step.__setitem__(0, value))
+                   on_change=set_rotation_step)
     for axis, sign, shortcut in [(0, 1, 'i'), (1, 1, 'j'), (2, 1, 'u'),
                                  (0, -1, 'k'), (1, -1, 'l'), (2, -1, 'o')]:
         arm.add_button(f'rotate_{shortcut}', label=f'{"XYZ"[axis]} {"+" if sign > 0 else "−"}',
@@ -429,7 +432,7 @@ def add_controls(base, demo):
         demo.show_forces = checked
         demo._sync_scene()
 
-    arm.add_button('stop', label='Stop / hold', group='Actions', column_span=3, shortcut='Escape',
+    arm.add_button('stop', label='Stop', group='Actions', column_span=3, shortcut='Escape',
                    on_click=lambda: request(demo.stop_motion))
     arm.add_button('ready', label='Retract / ready', group='Actions', column_span=3,
                    on_click=lambda: request(lambda: demo.select_pose('ready')))

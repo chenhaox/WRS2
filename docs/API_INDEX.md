@@ -741,10 +741,10 @@ _Rectified pinhole calibration: +X right, +Y down, +Z forward, meters._
 ## `wrs.sensor.d405_noise`
 _Vectorized, stateful hole/value stereo corruption with no learned dependency._
 
-- `depth_edges(depth, threshold_m=0.005, band_width_px=3)` — Return edge mask, horizontal-edge mask, and Chebyshev distance in pixels.
+- `depth_edges(depth, threshold_m=0.005)` — Return edge mask, horizontal-edge mask, and Chebyshev distance in pixels.
 - `build_noise_cues(clean_depth, config, camera_model, baseline_m, *, rgb=None, normals=None, semantic_ids=None, material_difficulty=None, motion_px=0.0)` — Build reusable geometry/appearance features, all in the input image grid.
 - **class `CorruptionReason`**
-- **class `D405NoiseState`** — Sensor-grid temporal history; get_state/set_state also preserve RNG state.
+- **class `D405NoiseState`** — Sensor-grid history; disparity history is a unit-normal AR field.
 - **class `D405NoiseResult`**
 - **class `D405HoleNoiseModel`** — Replaceable probability model: probability(cues, config) -> (H,W) [0,1].
   - methods: `probability`

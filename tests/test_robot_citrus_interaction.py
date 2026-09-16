@@ -92,11 +92,11 @@ class RobotCitrusInteractionTests(unittest.TestCase):
     def test_arm_contacts_both_foliage_and_fruit_then_releases(self):
         d = self.demo
         self.assertIsInstance(d.robot, FAFURobotArm)
-        self.assertEqual(d.env.model.nu, 6)
-        self.assertEqual(d.env.model.nv, d.robot.ndof + d.plant.mech.ndof)
+        self.assertEqual(d.env.model.nu, 8)
+        self.assertEqual(d.env.model.nv, d.robot.ndof + d.gripper.ndof + d.plant.mech.ndof)
         self.assertIsInstance(d.gripper, FAFUGripper)
         self.assertIs(d.robot.end_effector, d.gripper)
-        self.assertEqual(d.gripper.ndof, 0)
+        self.assertEqual(d.gripper.ndof, 2)
         for link in d.gripper.runtime_lnks:
             self.assertEqual(link.collision_group, wuc.CollisionGroup.ACTIVE)
         result = run_smoke(d)
