@@ -139,9 +139,17 @@ JSON 的 `color_intrinsics.K/dist` 保留在标定文件中，但没有图像分
 RGB-D 内参暂用 VirtualD405 名义模型。界面区分“calibrated mount / nominal intrinsics”。
 已应用的外参以用户提供的 frame 约定为依据，未独立验证实机标定误差。
 
-右侧显示 RGB、深度和点云统计，可叠加世界坐标点云与距离相关深度噪声。
+右侧显示 RGB、raw-like 深度、同色标的 clean 深度对照和点云统计，可叠加青色世界坐标点云。
+默认使用 `agriculture_foliage` 噪声：相关空洞、边缘错配、小幅视差误差和时序闪烁。
+`D405 holes / mismatch / temporal noise` 开关控制整套误差，sigma 滑块只控制正常视差精度；
+sigma=0 仍有空洞和错配。关闭噪声时直接复用 GPU 的理想 Z16/XYZ，保留量程和量化。
+配置在 `lab_citrus_robot.json` 的 `robot_demo.d405.depth_noise` 中，支持 preset 和 overrides。
+相机硬量程为 0.07–2 m，推荐范围默认到 0.5 m 后逐渐退化；2 m 不是实机性能承诺。
+Jet 色标固定为 0.07–0.8 m，超过色标上限的有效深度仍保留，只显示端点颜色。
+默认 320×240、10 Hz；界面分列噪声、XYZ 和整帧耗时，并显示相机光心世界 XYZ。
 RGB、depth、点云来自同一 DepthFrame，世界点云用该帧保存的位姿。
-显示点云、调试图形和传感器自身外壳不参与成像；复位清除旧观测。
+显示点云、调试图形和传感器自身外壳不参与成像；复位及噪声调参清除旧观测和时序状态，
+不重建渲染器。clean 对照仅用于诊断。详见 [D405 噪声模型](d405_noise.md)。
 机械臂仍为 6 个 actuator，植物为 19 个 passive DOF。
 尚未接入真实 D405 驱动或视觉伺服。
 

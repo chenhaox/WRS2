@@ -123,6 +123,13 @@ class VirtualD405(VirtualDepthCamera):
             if debug or any(value is not None for value in (normals, semantic_ids, material_difficulty, motion_px)):
                 raise ValueError('debug/additional noise cues require noise_config')
             return frame
+        if not self.noise_config.enabled and not debug and all(
+                value is None for value in (normals, semantic_ids, material_difficulty, motion_px)):
+            # The existing GPU pass already produced ideal Z16 and XYZ. Reuse
+            # them when corruption is off, without CPU cues or a second XYZ pass.
+            timings = dict(frame.timings_ms, noise_model_cpu=0., noise_pointcloud_cpu=0.)
+            timings['capture_total'] = (perf_counter()-started)*1000
+            return replace(frame, timings_ms=timings)
         noise_started = perf_counter()
         result = self.noise_model.apply(frame.depth_gt, self.camera_model, self.baseline_m,
             rgb=frame.rgb, camera_tf=frame.T_world_camera, normals=normals, semantic_ids=semantic_ids,

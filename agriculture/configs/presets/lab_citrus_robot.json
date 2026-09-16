@@ -51,7 +51,8 @@
       "mode": "d405_fast",
       "seed": 42,
       "min_depth": 0.07,
-      "max_depth": 0.50,
+      "max_depth": 2.0,
+      "depth_color_max_m": 0.80,
       "render_far_m": 5.0,
       "rgb_background": [0.949019608, 0.949019608, 0.941176471],
       "rgb_lighting": {
@@ -63,8 +64,9 @@
         "key_power": 4.0
       },
       "depth_noise": {
-        "enabled": false,
-        "profile": {"disparity_std_px": 0.05, "disparity_step_px": 0.03125},
+        "enabled": true,
+        "preset": "agriculture_foliage",
+        "overrides": {},
         "slider_max_px": 0.30,
         "slider_step_px": 0.005,
         "reference_depths_m": [0.20, 0.40]
