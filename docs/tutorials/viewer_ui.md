@@ -118,7 +118,8 @@ depth_view.update(colorize_depth(
     frame.depth_m, value_range=(0.07, 0.5), valid_mask=frame.valid_mask))
 ```
 
-`colorize_depth()` maps near to blue and far to red, with green in between.
+`colorize_depth()` uses Jet: dark blue, blue, cyan, green, yellow, red, then dark red
+from near to far.
 Nonpositive/nonfinite or masked pixels are black; finite positive values outside
 the bounds are clipped. Bounds use the input's units, and input data is unchanged.
 

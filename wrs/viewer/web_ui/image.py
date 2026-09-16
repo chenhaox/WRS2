@@ -105,10 +105,11 @@ class UIImage:
 
 
 def colorize_depth(depth, *, value_range, valid_mask=None):
-    """Map a 2-D depth array to uint8 RGB (blue to red), invalid pixels black.
+    """Map a 2-D depth array to uint8 RGB using Jet; invalid pixels are black.
 
     value_range uses the input's units: meters for DepthFrame.depth_m. Fixed
     bounds make colors comparable across frames. Does not modify source data.
+    Near to far: dark blue, blue, cyan, green, yellow, red, dark red.
     """
     depth = np.asarray(depth)
     if depth.ndim != 2 or depth.dtype.kind not in 'uif':
@@ -123,7 +124,7 @@ def colorize_depth(depth, *, value_range, valid_mask=None):
             raise ValueError('valid_mask must be a boolean array matching depth')
         valid &= mask
     t = np.clip((np.where(valid, depth, low).astype(np.float64) - low) / (high - low), 0, 1)
-    # A small fixed palette avoids an additional plotting-library dependency.
-    rgb = np.stack((t, 1 - np.abs(2 * t - 1), 1 - t), axis=-1)
+    # Piecewise-linear Jet, evaluated directly without a plotting dependency.
+    rgb = np.clip(1.5 - np.abs(4 * t[..., None] - np.array([3., 2., 1.])), 0, 1)
     rgb[~valid] = 0
     return np.rint(rgb * 255).astype(np.uint8)

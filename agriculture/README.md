@@ -17,6 +17,9 @@
 .\.venv\Scripts\python.exe -m examples.agriculture.dynamic_citrus --case clusters
 .\.venv\Scripts\python.exe -m examples.agriculture.dynamic_citrus --case push
 
+# 机械臂关节滑块 + 实时叶簇/果实接触
+.\.venv\Scripts\python.exe -m examples.agriculture.robot_citrus_interaction
+
 # 确定性通用程序化路径
 .\.venv\Scripts\python.exe -m examples.agriculture.generic_plant_demo --seed 7
 .\.venv\Scripts\python.exe -m examples.agriculture.generic_plant_demo --seed 21
@@ -24,7 +27,7 @@
 # 无 viewer 的真实 MuJoCo 接触验证及轨迹导出
 .\.venv\Scripts\python.exe -m examples.agriculture.dynamic_citrus --case push --headless --report push_report.json --trace push_trace.json
 
-# 回归测试：34 项（含当前工作区原有的 19 项测试）+ 原 V1 的 19 项
+# 回归测试：工作区 tests（含 agriculture / 机械臂交互）+ 原 V1 的 19 项
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 .\.venv\Scripts\python.exe -m unittest discover -s examples/agriculture/citrus_tree -t . -p "test_*.py" -v
 ```
@@ -32,6 +35,35 @@
 新例子也支持直接运行脚本。`--port` 选择 viewer 端口。
 静态/枝簇例子支持 `--duration 5` 有界退出；push 跑完接触、回弹和稳定阶段后退出，网页保留最终场景。
 无浏览器自动弹出时设置 `$env:WRS_VIEWER_NO_BROWSER='1'`。
+
+## 机械臂交互示例
+
+`robot_citrus_interaction.py` 使用现有 RS007L 和固定在法兰上的蓝色圆头触碰工具。
+左侧六个滑块的单位是 degree，范围取机械臂真实 joint limits。滑块改变位置伺服目标，
+目标以配置的最大角速度推进，机械臂实际位姿由 MuJoCo 更新；不会通过 FK 瞬移到叶簇内部。
+右侧显示实际角度、当前接触类别、植物偏转和下方果实的世界坐标。
+
+可以先点击 **Touch leaves** 或 **Touch orange_000**，观察枝簇/果实让位，再点击
+**Retract / ready** 观察回弹。也可以直接拖动任意关节；**Pause physics** 暂停仿真，
+**Reset robot and tree** 恢复初始化后的完整物理状态。复位保留暂停和显示开关状态。
+接触代理、机械臂/枝条/果实碰撞形状和接触力箭头均有独立显示开关。
+
+交互参数集中在 `configs/presets/lab_citrus_robot.json`，继承 lab citrus preset：
+机械臂基座、工具尺寸、示范目标、位置伺服增益、关节目标速度与相机均可调整。
+三个示范姿态由 WRS IK 在启动时求解，是便于探索的姿态，不是避障轨迹规划。
+只有机械臂有六个 actuator，植物保持 11 个 passive DOF。叶片通过 V2 的枝簇代理接触；
+橙子仍与枝条刚性连接，不会抓取或脱落。触碰工具的 ACTIVE 碰撞角色显式设置，
+不会因为它是固定 mount 而与植物的 STATIC 角色互相过滤。
+
+无界面接触与撤回验证、或限制 viewer 运行时间：
+
+```powershell
+python -m examples.agriculture.robot_citrus_interaction --headless --report robot_contact.json
+python -m examples.agriculture.robot_citrus_interaction --port 8001 --duration 30
+python -m unittest discover -s tests -p "test_robot_citrus_interaction.py" -v
+```
+
+本例只新增示例、配置和回归测试，未修改 WRS core、RS007L 定义或现有植物动力学参数。
 
 ## 数据与 API
 

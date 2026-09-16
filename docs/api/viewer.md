@@ -44,7 +44,7 @@ _Web UI constants, following wrs.utils.constant's class/member convention._
 ## `wrs.viewer.web_ui.image`
 _Latest-frame image storage, separate from JSON control snapshots._
 
-- `colorize_depth(depth, *, value_range, valid_mask=None)` — Map a 2-D depth array to uint8 RGB (blue to red), invalid pixels black.
+- `colorize_depth(depth, *, value_range, valid_mask=None)` — Map a 2-D depth array to uint8 RGB using Jet; invalid pixels are black.
 - **class `UIImage`** — A read-only image handle returned by UIPanel.add_image().
   - methods: `update`, `clear`
 

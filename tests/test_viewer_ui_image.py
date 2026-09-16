@@ -115,14 +115,19 @@ class ImageTests(unittest.TestCase):
         depth = np.array([[.1, .3, .5], [0, np.nan, np.inf]])
         before = depth.copy()
         rgb = colorize_depth(depth, value_range=(.1, .5))
-        np.testing.assert_array_equal(rgb[0, 0], [0, 0, 255])
-        np.testing.assert_array_equal(rgb[0, 2], [255, 0, 0])
+        np.testing.assert_array_equal(rgb[0, 0], [0, 0, 128])
+        np.testing.assert_array_equal(rgb[0, 2], [128, 0, 0])
         np.testing.assert_array_equal(rgb[1], 0)
         np.testing.assert_array_equal(depth, before)
         np.testing.assert_array_equal(colorize_depth(depth, value_range=(.1, .5),
                                                      valid_mask=np.zeros(depth.shape, dtype=bool)), 0)
         with self.assertRaises(ValueError):
             colorize_depth(depth, value_range=(1, 0))
+        # Recognizable Jet landmarks, also checking clipping beyond the range.
+        ramp = np.array([[.5, 1, 1.375, 1.625, 2, 3]])
+        np.testing.assert_array_equal(colorize_depth(ramp, value_range=(1, 2)),
+                                      [[[0, 0, 128], [0, 0, 128], [0, 255, 255],
+                                        [255, 255, 0], [128, 0, 0], [128, 0, 0]]])
 
 
 class FakeViewer:
