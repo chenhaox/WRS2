@@ -31,7 +31,23 @@ class Joint:
         mmc=None,
         lmt_lo=None,
         lmt_up=None,
+        *,
+        actuated=True,
+        damping=1.0,
+        stiffness=0.0,
+        springref=0.0,
+        frictionloss=0.01,
+        armature=0.02,
     ):
+        if type(actuated) is not bool:
+            raise ValueError("actuated must be bool")
+        self.actuated = actuated
+        for key, value in dict(damping=damping, stiffness=stiffness,
+                               springref=springref, frictionloss=frictionloss,
+                               armature=armature).items():
+            if not np.isfinite(value) or (key != 'springref' and value < 0):
+                raise ValueError(f"invalid joint {key}: {value}")
+            setattr(self, key, float(value))
         self.jtype = jnt_type
         self.ax = wum.unit_vec(axis, return_length=False)
         self.rotmat = wum.ensure_rotmat(rotmat)
@@ -173,6 +189,9 @@ class FlatMechStructure:
         self.jtypes_by_idx = np.zeros(self.n_jnts, dtype=np.int32)
         self.jax_by_idx = np.zeros((self.n_jnts, 3), dtype=np.float32)
         self.jtf0_by_idx = np.zeros((self.n_jnts, 4, 4), dtype=np.float32)
+        self.actuated_by_idx = np.ones(self.n_jnts, dtype=bool)
+        self.passive_params = {key: np.zeros(self.n_jnts, dtype=float)
+                               for key in ('damping', 'stiffness', 'springref', 'frictionloss', 'armature')}
         # mimic
         self.mmc_src_by_idx = np.full(self.n_jnts, -1, dtype=np.int32)
         self.mmc_mult_by_idx = np.ones(self.n_jnts, dtype=np.float32)
@@ -227,6 +246,9 @@ class FlatMechStructure:
             self.jtypes_by_idx[jidx] = jnt.jtype
             self.jax_by_idx[jidx] = jnt.ax
             self.jtf0_by_idx[jidx] = jnt.zero_tf
+            self.actuated_by_idx[jidx] = jnt.actuated
+            for key, values in self.passive_params.items():
+                values[jidx] = getattr(jnt, key)
             # mimic
             if jnt.mmc is not None:
                 src, mult, offset = jnt.mmc

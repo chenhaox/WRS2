@@ -83,6 +83,7 @@ nav:
       - Kinematics: tutorials/kinematics.md
       - Scene & Geometry: tutorials/scene_geometry.md
       - Viewer Controls: tutorials/viewer_ui.md
+      - Virtual Depth Camera: tutorials/virtual_depth_camera.md
       - Collision: tutorials/collision.md
       - Grasp Planning: tutorials/grasp_planning.md
       - Motion Planning: tutorials/motion_planning.md
@@ -93,6 +94,7 @@ nav:
       - Overview: api/index.md
       - wrs.utils: api/utils.md
       - wrs.scene: api/scene.md
+      - wrs.sensor: api/sensor.md
       - wrs.geom: api/geom.md
       - wrs.collider: api/collider.md
       - wrs.grasp: api/grasp.md

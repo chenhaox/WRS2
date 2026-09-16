@@ -1,0 +1,5 @@
+!README.md
+!ARCHITECTURE.md
+!configs/
+!configs/**/*.json
+!configs/*.json

@@ -31,13 +31,22 @@ class MechBase:
 
     @property
     def structure(self):
+        if getattr(self, '_instance_structure', None) is not None:
+            return self._instance_structure
         cls = type(self)
         if cls._structure is None:
             cls._structure = cls._build_structure()
         return cls._structure
 
     def __init__(self, rotmat=None, pos=None,
-                 home_qs=None, is_floating=True):
+                 home_qs=None, is_floating=True, *, structure=None):
+        # Optional per-instance topology; existing robot subclasses retain their
+        # lazily built class-level structures and unchanged constructors.
+        if structure is not None and not isinstance(structure, wrbms.MechStruct):
+            raise TypeError('structure must be a MechStruct')
+        self._instance_structure = structure
+        if structure is not None and structure._compiled is None:
+            structure.compile()
         self._compiled = self.structure._compiled
         self._rotmat = wum.ensure_rotmat(rotmat)
         self._pos = wum.ensure_pos(pos)
@@ -414,6 +423,7 @@ class MechBase:
     def clone(self):
         """DOES NOT clone the affiliated scene"""
         new = self.__class__.__new__(self.__class__)
+        new._instance_structure = self._instance_structure
         new._compiled = self._compiled
         new._rotmat = self._rotmat.copy()
         new._pos = self._pos.copy()
@@ -432,6 +442,7 @@ class MechBase:
             plink = new.runtime_lnks[plidx]
             new._mountings[child] = Mounting(
                 child, plink, m.loc_tf.copy())
+            child._mounted_by = new
         # chains are structure-level + shared -> copy refs, no remap
         new._chains = dict(self._chains)
         new._tcps = {}

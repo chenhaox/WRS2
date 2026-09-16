@@ -116,19 +116,21 @@ class MJWRSConverter:
             # hosting joint frame
             jnode = wpmno.JointNode(wpmna.alloc_name("jnt"))
             self._mecj2jnt[(mecba, jidx)] = jnode
+            jnode.actuated = bool(compiled.actuated_by_idx[jidx])
             jtype = compiled.jtypes_by_idx[jidx]
             if jtype == wuc.JntType.REVOLUTE:
                 jnode.jtype_str = "hinge"
-                act = wpmno.ActuatorNode(wpmna.alloc_name("ra"))
-                act.joint = jnode
-                self._actuators.append(act)
             elif jtype == wuc.JntType.PRISMATIC:
                 jnode.jtype_str = "slide"
-                act = wpmno.ActuatorNode(wpmna.alloc_name("sa"))
-                act.joint = jnode
-                self._actuators.append(act)
             else:
                 jnode.jtype_str = "fixed"
+            if jnode.jtype_str != "fixed" and compiled.actuated_by_idx[jidx]:
+                prefix = "ra" if jnode.jtype_str == "hinge" else "sa"
+                act = wpmno.ActuatorNode(wpmna.alloc_name(prefix))
+                act.joint = jnode
+                self._actuators.append(act)
+            for key, values in compiled.passive_params.items():
+                setattr(jnode, key, float(values[jidx]))
             jnode.ax = tuple(compiled.jax_by_idx[jidx])
             jnode.range = (float(compiled.jlmt_low_by_idx[jidx]),
                            float(compiled.jlmt_high_by_idx[jidx]))
@@ -173,14 +175,11 @@ class MJWRSConverter:
             jnode.jtype_str = "free"
             b.hosting_jnts.append(jnode)
         b.pos, b.quat = wum.pos_quat_from_tf(ref_tf)
+        # Explicit inertia also supports collision-free articulated spacer links.
+        if sobj.mass is not None and sobj.com is not None and sobj.inrtmat is not None:
+            b.inertial = wpmno.InertialNode(sobj.mass, sobj.com, sobj.inrtmat)
         if sobj.collisions:
-            if (sobj.mass is not None and
-                    sobj.com is not None and
-                    sobj.inrtmat is not None):
-                b.inertial = wpmno.InertialNode(
-                    mass=sobj.mass, com=sobj.com,
-                    inertia=sobj.inrtmat)
-            elif sobj.mass is not None:
+            if b.inertial is None and sobj.mass is not None:
                 com, inrtmat = wpi.inertia_from_collisions(
                     sobj.collisions, sobj.mass)
                 b.inertial = wpmno.InertialNode(
@@ -294,6 +293,10 @@ class MJWRSConverter:
             return
         parent = body.parent
         if parent is None:
+            return
+        # A moving or explicitly inertial frame is not an empty structural stub.
+        # Folding it changes joint pivots/axes and can discard spacer inertia.
+        if parent.inertial is not None or any(not j.actuated for j in parent.hosting_jnts + body.hosting_jnts):
             return
         merge = 0
         if len(parent.geoms) == 0 and len(body.geoms) > 0:

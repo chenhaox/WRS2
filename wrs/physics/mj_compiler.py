@@ -128,6 +128,8 @@ class MJCFCompiler:
         je.set("damping", str(j.damping))
         je.set("frictionloss", str(j.frictionloss))
         je.set("armature", str(j.armature))
+        je.set("stiffness", str(j.stiffness))
+        je.set("springref", str(j.springref))
 
     def compile_geom(self, g, parent_el):
         ge = ET.SubElement(parent_el, "geom")

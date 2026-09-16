@@ -718,6 +718,31 @@ _Mesh geometry operations on raw (vertices, faces) arrays: surface_
 - `frustrum(base_center=(0, 0, 0), top_center=(0, 0, 0.05), bottom_length=0.05, top_length=0.03, rgb=wuc.BasicColor.DEFAULT, alpha=1.0, **kwargs)`
 - `mesh(vs, fs, collision_type=None, is_floating=False, rgb=wuc.BasicColor.DEFAULT, alpha=1.0, **kwargs)` — Build a SceneObject from user-specified vertices/faces.
 
+## `wrs.sensor.camera_model`
+_Rectified pinhole calibration: +X right, +Y down, +Z forward, meters._
+
+- **class `CameraModel`** — Pinhole intrinsics in pixels; integer (u, v) denotes a pixel center.
+  - methods: `matrix`, `from_fov`, `deproject`, `project`, `ray_lut`, `render_model`, `remap_lut`
+
+## `wrs.sensor.depth_noise`
+_Optional single-view approximations of stereo depth errors._
+
+- **class `StereoDepthNoise`** — Configurable disparity noise, quantization, and independent dropout.
+  - methods: `apply`
+
+## `wrs.sensor.virtual_d405`
+_D405 nominal preset for the common WRS virtual depth pipeline._
+
+- **class `VirtualD405`** — Passive-stereo D405 approximation, anchored at the left optical frame.
+
+## `wrs.sensor.virtual_depth_camera`
+_Scene-mounted virtual depth camera with separate rendering and sensor stages._
+
+- **class `DepthFrame`** — One capture with calibration and world-from-camera pose snapshots.
+  - methods: `depth_m`, `intrinsics`, `T_world_camera`, `points_cam`, `points_world`, `valid_mask`, `get_point_cloud`
+- **class `VirtualDepthCamera`** — Render a WRS scene on the GPU without a viewer or external simulator.
+  - methods: `T_mount_camera`, `T_world_camera`, `near`, `far`, `fps`, `mode`, `camera_model`, `min_depth`, `max_depth`, `depth_scale`, `baseline_m`, `noise`, `capture`, `process_depth`, `clone`, `close`
+
 ## `wrs.utils.constant`
 
 - **class `BasicColor`**

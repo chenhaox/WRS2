@@ -21,4 +21,7 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ['one*', 'wrs*']
+include = ['one*', 'wrs*', 'agriculture*']
+
+[tool.setuptools.package-data]
+agriculture = ['configs/*.json', 'configs/species/*.json', 'configs/presets/*.json']

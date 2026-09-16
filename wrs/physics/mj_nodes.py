@@ -84,6 +84,9 @@ class JointNode:
         self.damping = 1
         self.frictionloss = 0.01
         self.armature = .02
+        self.stiffness = 0.0
+        self.springref = 0.0
+        self.actuated = True
 
 
 class InertialNode:
