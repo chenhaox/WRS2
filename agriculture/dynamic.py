@@ -45,8 +45,11 @@ class DynamicPlantInstance:
         return self
 
     def summary(self):
+        contact_leaves = sum(self.segment_clusters[leaf.parent_segment] is not None for leaf in self.spec.leaves)
         return self.spec.summary() | dict(dynamic_cluster_count=len(self.dynamics.clusters),
             passive_dof=self.mech.ndof,
+            foliage_contact_leaf_count=contact_leaves,
+            visual_only_leaf_count=len(self.spec.leaves) - contact_leaves,
             foliage_proxy_count=sum(len(obj.collisions) for group in self.foliage_proxies.values() for obj in group),
             foliage_proxy_object_count=sum(map(len, self.foliage_proxies.values())),
             leaf_batch_count=len(self.leaf_objects), physics_link_count=len(self.mech.runtime_lnks))

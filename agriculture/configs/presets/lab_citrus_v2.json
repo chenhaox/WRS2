@@ -2033,6 +2033,264 @@
         "root_segment": "front_lower_shoot_01",
         "dof": 1,
         "profile": "foliage"
+      },
+      {
+        "id": "contact_apex_shoot_00",
+        "root_segment": "apex_shoot_00",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_apex_shoot_01",
+        "root_segment": "apex_shoot_01",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_apex_shoot_02",
+        "root_segment": "apex_shoot_02",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_apex_shoot_03",
+        "root_segment": "apex_shoot_03",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_backing_middle_shoot_01",
+        "root_segment": "backing_middle_shoot_01",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_backing_middle_shoot_02",
+        "root_segment": "backing_middle_shoot_02",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_backing_middle_shoot_03",
+        "root_segment": "backing_middle_shoot_03",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_backing_middle_shoot_04",
+        "root_segment": "backing_middle_shoot_04",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_backing_middle_shoot_05",
+        "root_segment": "backing_middle_shoot_05",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_front_lower_shoot_00",
+        "root_segment": "front_lower_shoot_00",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_front_lower_shoot_02",
+        "root_segment": "front_lower_shoot_02",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_front_lower_shoot_03",
+        "root_segment": "front_lower_shoot_03",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_front_middle_shoot_00",
+        "root_segment": "front_middle_shoot_00",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_front_middle_shoot_03",
+        "root_segment": "front_middle_shoot_03",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_front_middle_shoot_04",
+        "root_segment": "front_middle_shoot_04",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_front_upper_shoot_00",
+        "root_segment": "front_upper_shoot_00",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_front_upper_shoot_01",
+        "root_segment": "front_upper_shoot_01",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_front_upper_shoot_02",
+        "root_segment": "front_upper_shoot_02",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_front_upper_shoot_03",
+        "root_segment": "front_upper_shoot_03",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_lower_left_shoot_00",
+        "root_segment": "lower_left_shoot_00",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_lower_left_shoot_01",
+        "root_segment": "lower_left_shoot_01",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_lower_left_shoot_02",
+        "root_segment": "lower_left_shoot_02",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_lower_left_shoot_03",
+        "root_segment": "lower_left_shoot_03",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_lower_right_shoot_00",
+        "root_segment": "lower_right_shoot_00",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_lower_right_shoot_01",
+        "root_segment": "lower_right_shoot_01",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_middle_left_shoot_00",
+        "root_segment": "middle_left_shoot_00",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_middle_left_shoot_02",
+        "root_segment": "middle_left_shoot_02",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_middle_left_shoot_03",
+        "root_segment": "middle_left_shoot_03",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_middle_left_shoot_04",
+        "root_segment": "middle_left_shoot_04",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_middle_left_shoot_05",
+        "root_segment": "middle_left_shoot_05",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_middle_right_shoot_00",
+        "root_segment": "middle_right_shoot_00",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_middle_right_shoot_01",
+        "root_segment": "middle_right_shoot_01",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_middle_right_shoot_02",
+        "root_segment": "middle_right_shoot_02",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_middle_right_shoot_03",
+        "root_segment": "middle_right_shoot_03",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_upper_left_shoot_00",
+        "root_segment": "upper_left_shoot_00",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_upper_left_shoot_01",
+        "root_segment": "upper_left_shoot_01",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_upper_left_shoot_02",
+        "root_segment": "upper_left_shoot_02",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_upper_left_shoot_03",
+        "root_segment": "upper_left_shoot_03",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_upper_left_shoot_04",
+        "root_segment": "upper_left_shoot_04",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_upper_right_shoot_01",
+        "root_segment": "upper_right_shoot_01",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_upper_right_shoot_02",
+        "root_segment": "upper_right_shoot_02",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_upper_right_shoot_03",
+        "root_segment": "upper_right_shoot_03",
+        "dof": 1,
+        "profile": "foliage"
+      },
+      {
+        "id": "contact_upper_right_shoot_04",
+        "root_segment": "upper_right_shoot_04",
+        "dof": 1,
+        "profile": "foliage"
       }
     ],
     "foliage_proxy": {

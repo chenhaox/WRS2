@@ -42,6 +42,9 @@ class RobotPlantInteraction:
         ground.add_to_scene(self.scene)
         spec = generate(config)
         self.plant = DynamicPlantBuilder(config).build(spec, PlantDynamicsSpec.from_config(spec, config))
+        plant_summary = self.plant.summary()
+        self.foliage_coverage = {key: plant_summary[key] for key in
+            ('foliage_contact_leaf_count', 'visual_only_leaf_count', 'foliage_proxy_count', 'foliage_proxy_object_count')}
         self.plant.add_to_scene(self.scene)
         # Pick the demonstration poses from the gravity-loaded tree, not q=0.
         warmup = MJEnv(self.scene, require_ctrl=True)
@@ -280,6 +283,7 @@ class RobotPlantInteraction:
         return dict(simulated_seconds=float(self.env.data.time - self._initial_time),
                     robot_actuators=len(self.actuators), plant_actuators=0,
                     contacts=self.contacts, contact_samples=self.contact_samples.copy(),
+                    foliage_coverage=self.foliage_coverage.copy(),
                     joint_target_deg=np.rad2deg(self.target).tolist(),
                     joint_actual_deg=np.rad2deg(self.robot.qs).tolist(),
                     tcp_target_m=self.target_position.tolist(), tcp_actual_m=self.tcp.pos.tolist(),
@@ -352,6 +356,12 @@ def add_controls(base, demo):
     arm.add_label('request', label='Last request', value='Ready')
     status.add_checkbox('paused', label='Pause physics', on_change=lambda value: setattr(demo, 'paused', value))
     status.add_checkbox('proxies', label='Show foliage contact proxies', on_change=proxies)
+    coverage = demo.foliage_coverage
+    status.add_label('foliage_coverage', label='Foliage contact coverage',
+        value=f'{coverage["foliage_contact_leaf_count"]:,} contact leaves / '
+              f'{coverage["visual_only_leaf_count"]:,} visual-only\n'
+              f'{coverage["foliage_proxy_object_count"]} compound objects · '
+              f'{demo.plant.dynamics.foliage_proxy.sections_per_leaf} strips per leaf')
     status.add_checkbox('collisions', label='Show arm / branch / fruit collisions', on_change=collision)
     status.add_checkbox('forces', label='Show contact force arrows', on_change=forces)
     for key, label in [('time', 'Simulation'), ('motion', 'Motion'),

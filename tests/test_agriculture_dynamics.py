@@ -7,6 +7,7 @@ from agriculture.config import load_config
 from agriculture.generator import generate
 from agriculture.dynamics import PlantDynamicsSpec
 from agriculture.dynamic import DynamicPlantBuilder
+from agriculture.geometry import leaf_mesh
 from agriculture.static import StaticPlantBuilder
 from agriculture.spec import PlantSpec, PlantSkeleton, StemSegment, LeafPlacement, LeafShape
 from wrs.physics.mj_env import MJEnv
@@ -46,7 +47,7 @@ class PlantIntegrationTests(unittest.TestCase):
     def test_native_contact_shapes_no_self_contact_no_leaf_dofs(self):
         plant = self.build(); scene = wss.Scene(); plant.add_to_scene(scene)
         env = MJEnv(scene, require_ctrl=True)
-        self.assertEqual((env.model.nv, env.model.nu), (11, 0))
+        self.assertEqual((env.model.nv, env.model.nu), (54, 0))
         self.assertTrue(all(not leaf.collisions for leaf in plant.leaf_objects))
         for shape, role in plant.collision_roles.items():
             self.assertIsInstance(shape, {'TRUNK': CapsuleCollisionShape, 'HARD_BRANCH': CapsuleCollisionShape,
@@ -55,8 +56,15 @@ class PlantIntegrationTests(unittest.TestCase):
         self.assertEqual(env.data.ncon, 0)
         self.assertEqual(env.model.nmesh, 0)
         self.assertTrue(all(obj.mounted_by is plant.mech and not obj.is_floating for obj in plant.fruits.values()))
-        self.assertEqual(plant.summary()['foliage_proxy_count'], 465)
-        self.assertEqual(plant.summary()['foliage_proxy_object_count'], 7)
+        summary = plant.summary()
+        self.assertEqual(summary['foliage_contact_leaf_count'], 1234)
+        self.assertEqual(summary['visual_only_leaf_count'], 294)
+        self.assertEqual(summary['foliage_proxy_count'], 3702)
+        self.assertEqual(summary['foliage_proxy_object_count'], 50)
+        for owner, objects in plant.foliage_proxies.items():
+            count = sum(plant.segment_clusters[leaf.parent_segment] == owner for leaf in plant.spec.leaves)
+            self.assertEqual(sum(len(obj.collisions) for obj in objects),
+                             count * self.dynamics.foliage_proxy.sections_per_leaf)
         self.assertLessEqual(sum(map(len, plant.foliage_proxies.values())), len(self.dynamics.clusters))
 
     def test_empty_foliage_fruit_and_nested_clusters(self):
@@ -75,6 +83,38 @@ class PlantIntegrationTests(unittest.TestCase):
         self.assertEqual(plant.fruits, {})
         env.step(.01)
         self.assertTrue(np.isfinite(env.data.qpos).all())
+
+    def test_previously_visual_only_front_leaves_have_real_contacts(self):
+        plant = self.build().set_pos_rotmat((.4, -.3, .1), wum.rotmat_from_euler(.4, -.2, .7))
+        plant.mech.fk(np.linspace(-.03, .03, plant.mech.ndof))
+        scene = wss.Scene()
+        plant.add_to_scene(scene)
+        probe = wssop.sphere(radius=.001, collision_type=wuc.CollisionType.SPHERE,
+                            mass=.01, is_floating=True)
+        probe.collision_group = wuc.CollisionGroup.ACTIVE
+        probe.add_to_scene(scene)
+        env = MJEnv(scene)
+        for root in ('front_upper_shoot_03', 'front_middle_shoot_04', 'front_lower_shoot_00'):
+            with self.subTest(root=root):
+                owner = plant.segment_clusters[root]
+                self.assertIsNotNone(owner)
+                target = plant.foliage_proxies[owner][0]
+                # Probe a true blade midrib point after both cluster bending and
+                # a nontrivial plant/world transform. Require this proxy body.
+                leaf = next(l for l in plant.spec.leaves if plant.segment_clusters[l.parent_segment] == owner)
+                vertices, _ = leaf_mesh(leaf.length, leaf.width, plant.spec.leaf_shape)
+                upper = vertices[:len(vertices) // 2]
+                middle = np.argmin(np.linalg.norm(upper[:, :2] - [leaf.length / 2, 0], axis=1))
+                point = upper[middle] @ np.asarray(leaf.rotmat).T + leaf.position
+                tf = plant.cluster_links[owner].tf @ np.linalg.inv(plant.cluster_frames[owner])
+                probe.pos = tf[:3, :3] @ point + tf[:3, 3]
+                env.sync.push_one_sobj_qpos(probe, probe.quat, probe.pos)
+                env.runtime.forward()
+                body = env.model.body(env.sync.sobj2bdy[target].name).id
+                probe_body = env.model.body(env.sync.sobj2bdy[probe].name).id
+                pairs = [{int(env.model.geom_bodyid[c.geom1]), int(env.model.geom_bodyid[c.geom2])}
+                         for c in env.data.contact]
+                self.assertIn({body, probe_body}, pairs)
 
     def test_real_proxy_push_rebound_and_settling(self):
         plant = self.build(); scene = wss.Scene(); plant.add_to_scene(scene)
