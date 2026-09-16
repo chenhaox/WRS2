@@ -202,11 +202,12 @@ class _GpuDepthProcessor:
                          noise.confidence_threshold, noise.texture_dropout_strength]
         params[28:32] = [noise.edge_dropout_strength, noise.dropout_rate,
                          noise.edge_threshold_m, noise.occlusion_tolerance_m]
+        legacy_noise = camera.mode == 'd405_fast' and getattr(camera, 'noise_model', None) is None
         params.view(np.uint32)[32:36] = [camera._rng.integers(0, 2**32, dtype=np.uint32),
-                                        camera.mode == 'd405_fast', noise.stereo_occlusion,
+                                        legacy_noise, noise.stereo_occlusion,
                                         camera._raw_min | (camera._raw_max << 16)]
         self.device.queue.write_buffer(self._uniform, 0, params)
-        if camera.mode == 'd405_fast' and noise.stereo_occlusion:
+        if legacy_noise and noise.stereo_occlusion:
             encoder.clear_buffer(self._right)
             compute = encoder.begin_compute_pass()
             compute.set_pipeline(self._reproject)

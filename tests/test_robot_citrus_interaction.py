@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 from wrs import wuc
 from wrs.robots.manipulators.fafu import FAFURobotArm
+from wrs.robots.end_effectors.fafu_gripper import FAFUGripper
 from examples.agriculture.robot_citrus_interaction import RobotPlantInteraction, run_smoke
 
 
@@ -40,7 +41,7 @@ class RobotCitrusInteractionTests(unittest.TestCase):
                         for fraction in (.5, 1):
                             q = (1 - fraction) * d._path_angles[i - 1] + fraction * d._path_angles[i]
                             expected = (1 - fraction) * d._path_positions[i - 1] + fraction * d._path_positions[i]
-                            tcp = solver.fk(q, d.robot.tf) @ d.robot.tcp('contact').loc_tf
+                            tcp = solver.fk(q, d.robot.tf) @ d.tcp.loc_tf
                             np.testing.assert_allclose(tcp[:3, 3], expected, atol=2e-4)
                             np.testing.assert_allclose(tcp[:3, :3], d.tool_rotation, atol=2e-3)
                             self.assertTrue(np.all((q >= d.limits[0]) & (q <= d.limits[1])))
@@ -93,7 +94,11 @@ class RobotCitrusInteractionTests(unittest.TestCase):
         self.assertIsInstance(d.robot, FAFURobotArm)
         self.assertEqual(d.env.model.nu, 6)
         self.assertEqual(d.env.model.nv, d.robot.ndof + d.plant.mech.ndof)
-        self.assertEqual(d.tool.collision_group, wuc.CollisionGroup.ACTIVE)
+        self.assertIsInstance(d.gripper, FAFUGripper)
+        self.assertIs(d.robot.end_effector, d.gripper)
+        self.assertEqual(d.gripper.ndof, 0)
+        for link in d.gripper.runtime_lnks:
+            self.assertEqual(link.collision_group, wuc.CollisionGroup.ACTIVE)
         result = run_smoke(d)
         for name, role, fruit in [('foliage', 'FOLIAGE', 'orange_001'),
                                    ('fruit', 'FRUIT', d.settings['fruit_id'])]:
@@ -109,6 +114,10 @@ class RobotCitrusInteractionTests(unittest.TestCase):
         self.assertTrue(np.isfinite(d.env.data.qpos).all())
         self.assertTrue(np.isfinite(d.env.data.qvel).all())
         self.assertEqual(sum(int(w.number) for w in d.env.data.warning), 0)
+        for link in d.gripper.runtime_lnks:
+            body = d.env.model.body(d.env.sync.rutl2bdy[link].name).id
+            np.testing.assert_allclose(link.pos, d.env.data.xpos[body], atol=3e-7)
+            np.testing.assert_allclose(link.rotmat, d.env.data.xmat[body].reshape(3, 3), atol=3e-7)
 
 
 if __name__ == '__main__':

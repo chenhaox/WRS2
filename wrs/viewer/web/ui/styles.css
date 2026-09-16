@@ -183,6 +183,10 @@
   font-variant-numeric: tabular-nums;
 }
 .wrs-ui-panel .ui-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
   min-height: 32px;
   padding: 6px 10px;
@@ -195,7 +199,17 @@
   transition: background .12s, border-color .12s;
 }
 .wrs-ui-panel .ui-action:hover { background: #dfeee5; border-color: #9fc1ac; }
-.wrs-ui-panel .ui-action:active { background: #d0e5d8; }
+.wrs-ui-panel .ui-action:active, .wrs-ui-panel .ui-action[data-held='true'] { background: #d0e5d8; }
+.wrs-ui-panel .ui-action-label { flex: 1; min-width: 0; }
+.wrs-ui-panel .ui-shortcut {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border: 1px solid #ccdfd4;
+  border-radius: 4px;
+  font: inherit;
+  font-size: .85em;
+  font-weight: 400;
+}
 .wrs-ui-panel .ui-label { display: grid; gap: 3px; }
 .wrs-ui-panel .ui-label-name { color: var(--ui-muted); font-size: .85em; }
 .wrs-ui-panel .ui-label-value { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; white-space: pre-wrap; }

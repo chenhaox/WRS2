@@ -9,12 +9,11 @@
     "ik_max_step_deg": 12,
     "ik_max_iter": 60,
     "tool_roll_deg": -90,
-    "tool_length": 0.18,
-    "tool_radius": 0.025,
-    "shaft_radius": 0.01,
-    "tool_mass": 0.08,
-    "shaft_mass": 0.08,
-    "tool_color": [0.15, 0.55, 0.95],
+    "gripper": {
+      "opening_m": 0.050,
+      "contact_link": "left_finger",
+      "contact_tip_band_m": 0.003
+    },
     "fruit_id": "orange_000",
     "foliage_cluster": "fruit_upper",
     "foliage_proxy_index": 0,
@@ -43,17 +42,9 @@
     "smoke_hold_seconds": 4.0,
     "smoke_release_seconds": 5.0,
     "d405": {
-      "source_urdf": "https://github.com/FAFU-Robotics/fafu_arm_sdk/blob/4f4a246efe97c51ded89d3fd8a9b9a595238e77f/fafu_robot_python/fafu_robot_description/urdf/fafu_baseV1_d405.urdf",
-      "calibration_status": "nominal; URDF has tool_link but no camera optical extrinsics",
+      "handeye_file": "wrist_d405_handeye.json",
+      "calibration_status": "user-provided T_flange_cam; metre; camera intrinsics remain nominal",
       "wrs_parent_link": "flange",
-      "urdf_tool_xyz_m": [0.170, 0.0, 0.0],
-      "urdf_tool_rpy_rad": [0.0, 0.0, 0.0],
-      "T_tool_optical": [
-        [0.0, 0.0, 1.0, -0.050],
-        [-1.0, 0.0, 0.0, 0.055],
-        [0.0, -1.0, 0.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0]
-      ],
       "width": 320,
       "height": 240,
       "fps": 10,
@@ -61,6 +52,23 @@
       "seed": 42,
       "min_depth": 0.07,
       "max_depth": 0.50,
+      "render_far_m": 5.0,
+      "rgb_background": [0.949019608, 0.949019608, 0.941176471],
+      "rgb_lighting": {
+        "key_direction": [-0.4, -0.5, -1.0],
+        "fill_direction": [0.6, 0.2, -1.0],
+        "key_intensity": 1.0,
+        "fill_intensity": 0.15,
+        "ambient": 0.04,
+        "key_power": 4.0
+      },
+      "depth_noise": {
+        "enabled": false,
+        "profile": {"disparity_std_px": 0.05, "disparity_step_px": 0.03125},
+        "slider_max_px": 0.30,
+        "slider_step_px": 0.005,
+        "reference_depths_m": [0.20, 0.40]
+      },
       "point_stride": 4,
       "body_size_m": [0.042, 0.042, 0.023],
       "body_color": [0.20, 0.24, 0.28],

@@ -6,7 +6,7 @@ import numpy as np
 
 from wrs import wss, wsso, wsrm, wssop, wum
 from wrs.scene.geometry_ops import ray_shoot_flat
-from wrs.sensor import CameraModel, StereoDepthNoise, VirtualDepthCamera, VirtualD405
+from wrs.sensor import CameraModel, StereoDepthNoise, RGBLighting, VirtualDepthCamera, VirtualD405
 
 
 def cpu_depth(objects, model, camera_tf, near, far):
@@ -235,6 +235,78 @@ class VirtualDepthCameraTest(unittest.TestCase):
         # Constant disparity noise produces approximately quadratic depth error.
         self.assertGreater(deviations[1]/deviations[0], 3.5)
         self.assertLess(deviations[1]/deviations[0], 4.5)
+
+    def test_lighting_and_distant_rgb_do_not_change_depth(self):
+        camera = VirtualD405(width=80, height=60, far=2, rgb_background=(242/255, 242/255, 240/255))
+        self.addCleanup(camera.close)
+        sphere = wssop.icosphere(pos=(0, 0, .3), radius=.06, subdivisions=2, rgb=(.2, .6, .9))
+        wall = wssop.box(pos=(0, 0, 1.01), xyz_lengths=(4, 4, .02), rgb=(.8, .7, .6))
+        unlit = camera.capture([sphere, wall])
+        camera.rgb_lighting = RGBLighting()
+        lit = camera.capture([sphere, wall])
+        np.testing.assert_array_equal(lit.depth_gt, unlit.depth_gt)
+        np.testing.assert_array_equal(lit.depth_raw, unlit.depth_raw)
+        near = lit.depth_gt < .5
+        self.assertEqual(len(np.unique(unlit.rgb[near], axis=0)), 1)
+        self.assertGreater(len(np.unique(lit.rgb[near], axis=0)), 12)
+        self.assertTrue(np.all(lit.depth_m[~near] == 0))
+        self.assertTrue(np.all(lit.rgb[~near] > 0))
+        empty = camera.capture([])
+        np.testing.assert_array_equal(empty.rgb, np.broadcast_to([242, 242, 240], empty.rgb.shape))
+        self.assertFalse(empty.valid_mask.any())
+        self.assertEqual(empty.points_world.shape, (0, 3))
+
+    def test_lighting_linear_color_and_reverse_faces(self):
+        camera = self.camera(rgb_lighting=RGBLighting(key_direction=(0, 0, -1),
+                                                     key_intensity=.4, fill_intensity=0, ambient=.1))
+        rgb = np.array([.5, .25, .75])
+        # Independent linear-intensity oracle: key .4 + ambient .1 = .5.
+        linear = ((rgb + .055) / 1.055) ** 2.4 * .5
+        expected = np.rint((1.055 * linear ** (1/2.4) - .055) * 255)
+        vertices = np.array([[-1, -1, .3], [1, -1, .3], [1, 1, .3], [-1, 1, .3]])
+        faces = np.array([[0, 1, 2], [0, 2, 3]])
+        for winding in (faces, faces[:, ::-1]):
+            plane = wssop.mesh(vertices, winding, rgb=rgb)
+            frame = camera.capture([plane])
+            np.testing.assert_allclose(frame.rgb, np.broadcast_to(expected, frame.rgb.shape), atol=1)
+            np.testing.assert_allclose(frame.depth_m, .3, atol=1e-7)
+
+    def test_runtime_noise_toggle_and_clone_preserve_rgb_and_resources(self):
+        camera = VirtualD405(width=64, height=48, seed=41, rgb_lighting=RGBLighting())
+        self.addCleanup(camera.close)
+        plane = wssop.box(pos=(0, 0, .36), xyz_lengths=(4, 4, .02), rgb=(.7, .4, .2))
+        baseline = camera.capture([plane])
+        renderer = camera._renderer
+        camera.noise = StereoDepthNoise(disparity_std_px=.08, disparity_step_px=1/32)
+        clone = camera.clone()
+        self.addCleanup(clone.close)
+        noisy = camera.capture([plane])
+        np.testing.assert_array_equal(noisy.depth_raw, clone.capture([plane]).depth_raw)
+        np.testing.assert_array_equal(noisy.depth_gt, baseline.depth_gt)
+        np.testing.assert_array_equal(noisy.rgb, baseline.rgb)
+        self.assertFalse(np.array_equal(noisy.depth_raw, baseline.depth_raw))
+        self.assertEqual(clone.rgb_lighting, camera.rgb_lighting)
+        self.assertEqual(clone.rgb_background, camera.rgb_background)
+        camera.noise = None
+        np.testing.assert_array_equal(camera.capture([plane]).depth_raw, baseline.depth_raw)
+        self.assertIs(camera._renderer, renderer)
+        with self.assertRaises(TypeError):
+            camera.noise = {'disparity_std_px': .1}
+        self.assertEqual(camera.noise, StereoDepthNoise())
+        ideal = self.camera()
+        with self.assertRaises(ValueError):
+            ideal.noise = StereoDepthNoise(dropout_rate=.1)
+
+    def test_rgb_settings_validation(self):
+        for kwargs in (dict(key_direction=(0, 0, 0)), dict(fill_direction=(1, 2)),
+                       dict(ambient=-1), dict(key_power=0), dict(fill_intensity=np.nan)):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                RGBLighting(**kwargs)
+        for background in ((1, 0), (1, 0, np.nan), (1.01, 0, 0)):
+            with self.subTest(background=background), self.assertRaises(ValueError):
+                self.camera(rgb_background=background)
+        with self.assertRaises(TypeError):
+            self.camera(rgb_lighting=True)
 
     def test_robot_mount_updates_optical_pose_without_scene_changes(self):
         from wrs.robots.manipulators.xarm.lite6.lite6 import Lite6

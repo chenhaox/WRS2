@@ -15,6 +15,7 @@ import mujoco
 import numpy as np
 from wrs import wss, wssop, wuc, wum, wvw
 from wrs.robots.manipulators.fafu import FAFURobotArm
+from wrs.robots.end_effectors.fafu_gripper import FAFUGripper
 from wrs.robots.base.kine.numik import NumIKSolver
 from wrs.physics.mj_env import MJEnv
 from wrs.viewer.web_ui import Anchor
@@ -55,27 +56,17 @@ class RobotPlantInteraction:
                 xyz_lengths=(p['pedestal_width'], p['pedestal_width'], p['base_position'][2]),
                 rgb=p['pedestal_color'], collision_type=wuc.CollisionType.AABB, name='arm_pedestal')
             pedestal.add_to_scene(self.scene)
-        self.tool = wssop.icosphere(radius=p['tool_radius'], rgb=p['tool_color'],
-                                   mass=p['tool_mass'], collision_type=wuc.CollisionType.SPHERE,
-                                   name='rounded_contact_tool')
-        self.shaft = wssop.cylinder(epos=(0, 0, p['tool_length']), radius=p['shaft_radius'],
-                                   rgb=p['tool_color'], mass=p['shaft_mass'],
-                                   collision_type=wuc.CollisionType.CAPSULE, name='contact_tool_shaft')
-        # Mounting changes pose ownership, not the primitive's default STATIC role.
-        for obj in (self.tool, self.shaft):
-            obj.collision_group = wuc.CollisionGroup.ACTIVE
-        self.robot.mount(self.shaft, self.robot.runtime_lnks[-1], update=True)
-        self.robot.mount(self.tool, self.robot.runtime_lnks[-1],
-                         wum.tf_from_pos_rotmat((0, 0, p['tool_length'])), update=True)
-        self.robot.add_tcp('contact', self.robot.runtime_lnks[-1],
-                           wum.tf_from_pos_rotmat((0, 0, p['tool_length'])))
+        self.gripper = FAFUGripper(fixed_opening=p['gripper']['opening_m'])
+        self.robot.mount(self.gripper, self.robot.tcp('flange').parent_lnk, update=True)
+        self.tcp = self.gripper.tcp('grasp_center')
         self.rgbd = MountedD405(self.robot, self.scene, p['d405'])
         self.camera = self.rgbd.camera
         self.presets = self._make_presets()
         self._ready_q = self._solve_tcp(self.presets['ready'], np.deg2rad(p['ik_seed_deg']))
         self.robot.fk(self._ready_q)
         self.robot.add_to_scene(self.scene)
-        excludes = [(obj, link) for obj in (self.tool, self.shaft) for link in self.robot.runtime_lnks[-2:]]
+        # Palm and the wrist housing meet at their mechanical mounting surface.
+        excludes = [(self.gripper.runtime_root_lnk, self.robot.runtime_lnks[-2])]
         self.env = MJEnv(self.scene, require_ctrl=True, extra_excludes=excludes)
         model = self.env.model
         # Explicit mapping: scene insertion order is not an actuator ordering API.
@@ -98,9 +89,7 @@ class RobotPlantInteraction:
         self.show_forces = False
         self._remainder = 0.0
         self.robot_bodies = {model.body(self.env.sync.rutl2bdy[link].name).id
-                             for link in self.robot.runtime_lnks}
-        self.robot_bodies.update(model.body(self.env.sync.sobj2bdy[obj].name).id
-                                 for obj in (self.tool, self.shaft))
+                             for link in (*self.robot.runtime_lnks, *self.gripper.runtime_lnks)}
         self.plant_bodies = {}
         for role, objects in self.plant.semantic_groups.items():
             for obj in objects:
@@ -129,13 +118,27 @@ class RobotPlantInteraction:
         shape = proxy.collisions[p['foliage_shape_index']]
         shape_tf = proxy.tf @ shape.loc_tf
         extent = np.sum(np.abs(direction @ shape_tf[:3, :3]) * shape.half_extents)
+        # Aim a real fingertip, not the empty grasp centre, at the surface.
+        # Native finger geometry is measured in gripper-local coordinates here.
+        finger = next(link for link in self.gripper.runtime_lnks
+                      if link.name == p['gripper']['contact_link'])
+        vertices = []
+        for visual in finger.visuals:
+            tf = np.linalg.inv(self.gripper.tf) @ finger.tf @ visual.loc_tf
+            vertices.append(visual.geom.vs @ tf[:3, :3].T + tf[:3, 3])
+        vertices = np.concatenate(vertices)
+        tip_z = vertices[:, 2].max()
+        tip = vertices[vertices[:, 2] >= tip_z - p['gripper']['contact_tip_band_m']].mean(axis=0)
+        tip[2] = tip_z
+        self.contact_point_tcp = tip - self.tcp.loc_tf[:3, 3]
+        tip_offset = self.tool_rotation @ self.contact_point_tcp
         positions = dict(ready=fruit.pos + p['ready_offset'],
-                         foliage=shape_tf[:3, 3] - direction * (extent + p['tool_radius'] - p['foliage_push_depth']),
-                         fruit=fruit.pos - direction * (radius + p['tool_radius'] - p['fruit_push_depth']))
+                         foliage=shape_tf[:3, 3] - direction * (extent - p['foliage_push_depth']) - tip_offset,
+                         fruit=fruit.pos - direction * (radius - p['fruit_push_depth']) - tip_offset)
         return {key: np.asarray(value, dtype=float) for key, value in positions.items()}
 
     def _solve_tcp(self, position, seed):
-        solutions = self.robot.ik(position, self.tool_rotation, tcp='contact',
+        solutions = self.robot.ik(position, self.tool_rotation, tcp=self.tcp,
                                   qs_active_init=seed, max_iter=self.settings['ik_max_iter'])
         if not solutions:
             raise ValueError('No nearby IK solution at the fixed tool orientation')
@@ -279,7 +282,9 @@ class RobotPlantInteraction:
                     contacts=self.contacts, contact_samples=self.contact_samples.copy(),
                     joint_target_deg=np.rad2deg(self.target).tolist(),
                     joint_actual_deg=np.rad2deg(self.robot.qs).tolist(),
-                    tcp_target_m=self.target_position.tolist(), tcp_actual_m=self.robot.tcp('contact').pos.tolist(),
+                    tcp_target_m=self.target_position.tolist(), tcp_actual_m=self.tcp.pos.tolist(),
+                    gripper_opening_m=self.settings['gripper']['opening_m'], gripper_mode='fixed_opening',
+                    T_flange_cam=self.rgbd.mount_tf.tolist(),
                     motion_status=self.motion_status,
                     plant_deflection_rad=float(np.linalg.norm(self.plant.mech.qs - self._initial_plant_q)),
                     fruit_displacement_m={k: float(np.linalg.norm(o.pos - self._initial_fruit[k]))
@@ -330,7 +335,7 @@ def add_controls(base, demo):
 
     def collision(checked):
         demo.robot.toggle_render_collision = checked
-        for obj in (*demo.plant.branch_objects, *demo.plant.fruit_objects, demo.tool, demo.shaft):
+        for obj in (*demo.plant.branch_objects, *demo.plant.fruit_objects):
             obj.toggle_render_collision = checked
 
     def forces(checked):
@@ -342,6 +347,8 @@ def add_controls(base, demo):
     arm.add_button('foliage', label='Touch leaves', on_click=lambda: request(lambda: demo.select_pose('foliage')))
     arm.add_button('fruit', label=f'Touch {demo.settings["fruit_id"]}', on_click=lambda: request(lambda: demo.select_pose('fruit')))
     arm.add_button('reset', label='Reset robot and tree', on_click=reset)
+    arm.add_label('gripper', label='FAFUGripper · fixed opening',
+                  value=f'{demo.settings["gripper"]["opening_m"] * 1000:.0f} mm · TCP at flange +Z 170 mm')
     arm.add_label('request', label='Last request', value='Ready')
     status.add_checkbox('paused', label='Pause physics', on_change=lambda value: setattr(demo, 'paused', value))
     status.add_checkbox('proxies', label='Show foliage contact proxies', on_change=proxies)

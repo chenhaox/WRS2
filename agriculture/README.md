@@ -38,11 +38,13 @@
 
 ## 机械臂交互示例
 
-`robot_citrus_interaction.py` 使用现有 FAFURobotArm 裸臂和固定在法兰上的蓝色圆头触碰工具。
+`robot_citrus_interaction.py` 使用 FAFURobotArm 和仓库原生 FAFUGripper 的掌部、双指网格及碰撞模型。
+本例夹爪保持 50 mm 固定开口，启动前可调整 `robot_demo.gripper.opening_m`（0～85 mm）。
 机械臂安装在 0.30 m 高的底座上，树的尺度不变。左侧提供前后、左右、上下六个按钮，
 `Move per click` 调节每次移动 1～30 mm，默认 10 mm。方向使用固定世界坐标：
 前为 +Y（朝树）、后为 −Y、右为 +X、左为 −X、上为 +Z、下为 −Z，不随相机旋转改变。
-TCP 是蓝色球心，工具朝向保持固定。右侧显示目标/实际 TCP 坐标、接触类别、植物偏转和果实世界坐标。
+TCP 是夹爪抓取中心，位于法兰 +Z 前方 170 mm，朝向保持固定。
+右侧显示目标/实际 TCP 坐标、接触类别、植物偏转和果实世界坐标。
 
 使用 WRS NumIKSolver，从相邻解出发检查整条直线路径；默认每 5 mm 一个 waypoint。
 关节解之间插值近似直线，同时限制 TCP 命令速度与各关节命令速度。UI 不直接修改 FK/qpos，
@@ -67,11 +69,12 @@ TCP 是蓝色球心，工具朝向保持固定。右侧显示目标/实际 TCP �
 旧配置的 `per_cluster` / `minimum_half_extent` 需替换为上述参数。
 
 交互参数集中在 `configs/presets/lab_citrus_robot.json`，继承 lab citrus preset：
-机械臂基座、工具尺寸、示范目标、位置伺服增益、笛卡尔/关节速度、工作区与相机均可调整。
+机械臂基座、夹爪开口、示范目标、位置伺服增益、笛卡尔/关节速度、工作区与相机均可调整。
+触碰预设从 `gripper.contact_link` 指定手指的原生网格提取指尖，将实际指尖对准表面。
 示范目标同样走上述笛卡尔路径。它是便于探索接触的局部控制，不是避障轨迹规划。
 只有机械臂有六个 actuator，植物保持 11 个 passive DOF。叶片通过 V2 的枝簇代理接触；
-橙子仍与枝条刚性连接，不会抓取或脱落。触碰工具的 ACTIVE 碰撞角色显式设置，
-不会因为它是固定 mount 而与植物的 STATIC 角色互相过滤。
+橙子仍与枝条刚性连接，不会抓取或脱落。夹爪连杆沿用原生 ACTIVE 碰撞角色，
+手指与掌部参加真实接触；相机示意外壳只有视觉。
 
 无界面接触与撤回验证、或限制 viewer 运行时间：
 
@@ -81,9 +84,10 @@ python -m examples.agriculture.robot_citrus_interaction --port 8001 --duration 3
 python -m unittest discover -s tests -p "test_robot_citrus_interaction.py" -v
 ```
 
-未修改 WRS core、FAFU 的几何/关节定义或现有植物动力学参数。
-FAFU 可用于当前定性接触演示，但质量/惯量/电机参数尚未标定，原生双指夹爪的 mimic 也尚未
-转换成 MuJoCo 联动约束，因此本例使用圆头工具，不装双指夹爪。详细调查见
+本次未修改 WRS 物理转换器、原始 STL 或植物动力学参数。
+FAFUGripper 增加可选 `fixed_opening`：为该实例把双指位置写入固定关节，默认可动模型保持不变。
+FAFU 的质量/惯量/电机参数尚未标定，原生双指 mimic 尚未转换成 MuJoCo 联动约束，
+所以本例提供固定开口接触，不提供物理开合抓取。详细调查见
 [FAFU 支持范围](../docs/tutorials/fafu_robot_arm.md#用于-citrus-交互仿真的支持范围)。
 
 ### 腕部 VirtualD405
@@ -95,11 +99,24 @@ FAFU 可用于当前定性接触演示，但质量/惯量/电机参数尚未标�
 点云每 4 个像素采样一次。实际采集耗时显示在面板中，首次 GPU 初始化可能较慢。
 RGB/depth 使用当前视觉表面，叶簇接触代理、碰撞线框、力箭头和显示点云不参与成像。
 
-安装参考官方 `fafu_baseV1_d405.urdf` 的 `link6 -> tool_link` 固定变换，
-**该 URDF 没有光学外参**；本例使用明确标为 nominal 的安装估计，并处理当前 WRS
-法兰与 URDF link6 的坐标轴差异。外壳也是程序化示意，不是精确 D405 CAD。
-参数集中在 `configs/presets/lab_citrus_robot.json` 的 `robot_demo.d405`；
-取得标定后替换 `T_tool_optical` 并重启，矩阵定义和来源见
+RGB 默认开启面光照（主光、补光和环境光），背景为与 viewer 相同的浅色。
+`render_far_m=5` 保留远处枝叶/地面的颜色，深度仍限制在 0.07–0.50 m；
+RGB 光照不改变几何真值，也不额外加入 viewer 的黑描边。
+右侧新增 **Depth noise (grows with distance)** 开关，默认关闭；开启后
+**Disparity noise sigma** 滑块控制视差噪声强度，深度图和点云一起更新。
+勾选 **Show world point cloud (cyan)** 可观察点在表面附近散开，距离越远越明显。
+面板给出 0.20 / 0.40 m 处的近似 Z 标准差，仅为当前参数的理论估计，不是实机精度指标。
+它复用 `StereoDepthNoise`，误差约随 Z² 增长；不是镜头径向畸变。
+具体参数位于同一 `robot_demo.d405` 下的 `rgb_lighting`、`rgb_background`、
+`render_far_m` 和 `depth_noise`；其中噪声幅度与量化步长均未用真实 D405 标定。
+
+安装使用用户提供的 `configs/wrist_d405_handeye.json`，完整保留原始矩阵与来源数据。
+其中 **`T_flange_cam`** 将相机光学坐标转换到法兰坐标，平移为
+`[-0.046916617, 0.007351220, 0.050142993]` m，光轴近似沿法兰 +Z。
+直接使用 `T_world_cam = T_world_flange @ T_flange_cam`，不再叠加旧 URDF 转轴或 TCP 偏移。
+`robot_demo.d405.handeye_file` 可替换标定文件：相对路径基于 `agriculture/configs`，也支持绝对路径。
+文件中的 `color_intrinsics` 没有分辨率，本次保留而不应用，RGB-D 仍使用名义内参。
+外壳仍为程序化示意，不是精确 D405 CAD，也没有建模安装支架。矩阵定义见
 [安装坐标说明](../docs/tutorials/fafu_robot_arm.md#citrus-中的-virtuald405-安装)。
 相机使用原生 `mount` 跟随实际法兰位姿，不额外施加质量、碰撞或关节。
 

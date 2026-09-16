@@ -43,7 +43,8 @@ RGB 和深度来自同一次 `capture()`。深度使用 **Jet（彩虹色图）*
 由近到远为深蓝、蓝、青、绿、黄、红、深红。无效深度为黑色；显示用的伪彩色不改变
 `frame.depth_m` 和 `frame.depth_raw`。RGB 图中没有物体覆盖的区域也默认是黑色，
 这是离屏渲染的清屏颜色，与浏览器三维 Viewer 的背景色独立。
-若希望采集到背景，应在场景中放置处于相机量程内的背景模型（如墙面）。
+可用 `rgb_background` 指定背景色；若希望采集实际背景模型（如墙面），使其位于
+`near..far` 渲染范围内即可。RGB 可见范围与 `min_depth..max_depth` 有效测量范围独立。
 
 先点击三维画面，再按住以下按键移动传感器；也可以点击左侧对应按钮，每次移动 1 cm：
 
@@ -66,6 +67,38 @@ RGB 和深度来自同一次 `capture()`。深度使用 **Jet（彩虹色图）*
 即使相机不在世界原点，点也能与模型对齐。半透明副本仅添加到显示场景，不参与采集。
 
 ## 接口与坐标
+
+### 可选 RGB 光照与实时噪声
+
+```python
+from wrs.sensor import VirtualD405, RGBLighting, StereoDepthNoise
+
+camera = VirtualD405(
+    far=5.0,                          # RGB / 几何可见至 5 m
+    min_depth=.07, max_depth=.50,      # 只有 7–50 cm 输出有效测量点
+    rgb_background=(242/255, 242/255, 240/255),
+    rgb_lighting=RGBLighting(),       # 两盏随光学相机移动的方向光 + 环境光
+    seed=42,
+)
+camera.noise = StereoDepthNoise(disparity_std_px=.05, disparity_step_px=1/32)
+frame = camera.capture(scene)
+camera.noise = None                   # 关闭随机噪声/视差量化，仍保留 fast 几何遮挡
+camera.rgb_lighting = None            # 恢复基础色；无需重建 GPU buffers
+camera.close()
+```
+
+`RGBLighting` 使用面法线、half-Lambert 主光、Lambert 补光和线性空间颜色计算，
+RGB 输出再编码为 sRGB。双面叶片按可见面着色；它不会改变几何 Z、碰撞或法兰位姿。
+光照、背景色独立于深度有效性；超量程表面可以出现在 RGB 中，但不会产生有效点云。
+公共相机默认仍为无光照、黑背景，以兼容已有脚本；Citrus 示例显式开启光照和浅色背景。
+没有投射阴影、viewer 的装饰性黑描边、曝光或完整 ISP。
+
+`noise` 可在 `d405_fast` 模式下实时替换，不重建相机、不重置 RNG。
+同一 seed、同一调用序列可复现；`clone()` 复制 RNG 状态和光照设置。
+噪声先作用于视差，再得到深度和点云，RGB 与 `depth_gt` 保持不变。
+在固定视差标准差下，`sigma_Z ≈ Z² * sigma_disparity / (fx * baseline)`；
+这是双目深度的不确定性，与镜头的 Brown–Conrady 畸变是不同设置。
+该距离关系也见 [RealSense 深度后处理说明](https://dev.realsenseai.com/docs/depth-post-processing-for-intel-realsense-depth-camera-d400-series/)。
 
 ```python
 import numpy as np
@@ -107,7 +140,7 @@ WGPU 投影显式使用四个内参，并补偿光栅化的半像素中心约定
 | `valid_mask` | H×W bool |
 | `points_cam` / `points_world` | N×3 float32，只包含有效像素，按图像行顺序排列 |
 | `points_cam_image` / `points_world_image` | H×W×3，GPU 已计算的稠密 XYZ，无效为零 |
-| `rgb` | H×W×3 uint8，当前 visual model 的无光照颜色，与深度同一视角 |
+| `rgb` | H×W×3 uint8，当前 visual model 的颜色，可选 matte 光照，与深度同一视角 |
 | `confidence` | H×W float32；启用纹理项时是 Sobel 亮度梯度启发式分数，不能当作标定概率 |
 | `camera_model` / `intrinsics` | 完整内参及畸变模型 / 3×3 K |
 | `T_world_camera` | 采集瞬间的 world-from-optical 变换快照 |
@@ -160,7 +193,7 @@ WRS visual triangles
   -> independent WGPU rasterization
      depth32float: Z-test only
      r32float: camera-space metric Z
-     rgba8unorm: unlit RGB
+     rgba8unorm: sRGB colour (unlit or matte-lit)
   -> optional synthetic-right reprojection / sensor model
   -> inverse-distortion LUT, nearest source sample
   -> range + uint16 encoding + camera/world XYZ (GPU)
@@ -233,7 +266,7 @@ SimSense 本身接收左右图像；场景成像是 SAPIEN 等上游渲染器的
 
 | SimSense 环节 | 对 D405 / WRS 的判断 | 当前实现 |
 | --- | --- | --- |
-| 上游左右图像与材质/照明 | 高保真阶段需要真实纹理及双视角 | 单视角无光照 RGB / Z |
+| 上游左右图像与材质/照明 | 高保真阶段需要真实纹理及双视角 | 单视角 RGB / Z，可选 matte 光照 |
 | 图像噪声、rectification | 双目匹配前有价值，需实机参数 | 后续；当前直接在 rectified 几何上工作 |
 | CSCT、Hamming cost、四方向 SGBM | 适合未来 `d405_stereo`，计算和存储成本明显增加 | 未实现 |
 | uniqueness、左右一致性 | 真实匹配可信度与空洞来源，应随 matcher 一起实现 | fast 仅做几何重投影遮挡，不能等同匹配一致性 |
@@ -258,7 +291,8 @@ Isaac 的 single-view depth sensor 从渲染深度构造视差和右视图，加
 测试覆盖正面平面、倾斜/偏轴物体、非对称内参、visual 局部变换、遮挡、量程、动态场景、
 安装外参、真实 Lite6 挂载与 FK、帧快照、点云重投影、Brown LUT、CPU raycast 对照、
 视差遮挡参考、GPU 随机可复现、误差随距离增长、纹理淘汰、量程边界、深度编码及资源重建。
-新增 14 项相机测试，与原有测试一起运行共 19 项通过。
+相机测试还覆盖线性光照、双面着色、远处 RGB/深度量程分离、空背景不产生点云、
+实时噪声切换以及 clone 的设置/随机序列继承。
 GPU 对 CPU raycast 的低分辨率深度误差断言为 20 µm；
 三角形恰好穿过像素中心的轮廓处可能因光栅覆盖规则与 raycast 判定不同。
 

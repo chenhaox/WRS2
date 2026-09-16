@@ -730,6 +730,11 @@ _Optional single-view approximations of stereo depth errors._
 - **class `StereoDepthNoise`** — Configurable disparity noise, quantization, and independent dropout.
   - methods: `apply`
 
+## `wrs.sensor.rgb_lighting`
+_Small camera-relative matte light rig for virtual RGB observations._
+
+- **class `RGBLighting`** — Two directional lights plus ambient, evaluated in linear RGB; immutable settings.
+
 ## `wrs.sensor.virtual_d405`
 _D405 nominal preset for the common WRS virtual depth pipeline._
 
@@ -741,7 +746,7 @@ _Scene-mounted virtual depth camera with separate rendering and sensor stages._
 - **class `DepthFrame`** — One capture with calibration and world-from-camera pose snapshots.
   - methods: `depth_m`, `intrinsics`, `T_world_camera`, `points_cam`, `points_world`, `valid_mask`, `get_point_cloud`
 - **class `VirtualDepthCamera`** — Render a WRS scene on the GPU without a viewer or external simulator.
-  - methods: `T_mount_camera`, `T_world_camera`, `near`, `far`, `fps`, `mode`, `camera_model`, `min_depth`, `max_depth`, `depth_scale`, `baseline_m`, `noise`, `capture`, `process_depth`, `clone`, `close`
+  - methods: `T_mount_camera`, `T_world_camera`, `near`, `far`, `fps`, `mode`, `camera_model`, `min_depth`, `max_depth`, `depth_scale`, `baseline_m`, `noise`, `rgb_lighting`, `rgb_background`, `capture`, `process_depth`, `clone`, `close`
 
 ## `wrs.utils.constant`
 
@@ -952,3 +957,4 @@ _UI message contract and pure validation, without sockets, DOM or callbacks._
 - `slider_value(control, value)` — Validate bounds and snap to the native range input's step lattice.
 - `select_value(control, value)` — Accept only one of the dropdown's string options.
 - `checkbox_value(value)` — Accept only booleans, including an explicit False for unchecked.
+- `shortcut_key(value)` — Validate one KeyboardEvent.key; reserve Tab and modifier keys.

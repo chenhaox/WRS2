@@ -60,10 +60,10 @@ export class InputManager {
    * press is one event however long the key is held.
    */
   _onKey(name, e) {
-    if (e.repeat || !this.onEvent) return;
+    if (e.defaultPrevented || e.repeat || !this.onEvent) return;
     if (this._isControl(e.target)) return;
     if (name === 'on_key_press') this._held.add(e.key);
-    else this._held.delete(e.key);
+    else if (!this._held.delete(e.key)) return;
     this.onEvent(name, e.key);
   }
 

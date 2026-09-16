@@ -1,4 +1,4 @@
-"""WGPU triangle rasterization into metric Z and unlit RGB attachments."""
+"""WGPU triangle rasterization into metric Z and optional matte RGB attachments."""
 
 import numpy as np
 import wgpu
@@ -13,6 +13,9 @@ struct Params {
     intrinsics: vec4<f32>,
     projection: vec4<f32>,
     color: vec4<f32>,
+    key_light: vec4<f32>, // optical direction + linear intensity
+    fill_light: vec4<f32>,
+    lighting: vec4<f32>, // ambient, key power, enabled, unused
 };
 @group(0) @binding(0) var<uniform> params: Params;
 
@@ -36,6 +39,16 @@ struct FragmentOutput {
     @location(0) depth_m: f32,
     @location(1) color: vec4<f32>,
 };
+
+fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
+    return select(pow((c + vec3<f32>(0.055)) / 1.055, vec3<f32>(2.4)),
+                  c / 12.92, c <= vec3<f32>(0.04045));
+}
+fn linear_to_srgb(c: vec3<f32>) -> vec3<f32> {
+    return select(1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055),
+                  c * 12.92, c <= vec3<f32>(0.0031308));
+}
+
 @fragment fn fs_main(in: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
     // Rasterizers snap vertices to a subpixel grid. Recover the triangle plane
@@ -49,6 +62,17 @@ struct FragmentOutput {
     out.depth_m = select(in.camera_point.z, dot(normal, in.camera_point) / denominator,
                         abs(denominator) > 1e-20);
     out.color = params.color;
+    if (params.lighting.z > 0.0) {
+        // Face the visible side toward the optical centre, including reverse
+        // leaf faces. Lighting never changes the geometric Z attachment.
+        var n = normal / max(length(normal), 1e-20);
+        n = select(n, -n, dot(n, in.camera_point) > 0.0);
+        let key = pow(clamp(dot(n, params.key_light.xyz) * 0.5 + 0.5, 0.0, 1.0), params.lighting.y);
+        let fill = max(dot(n, params.fill_light.xyz), 0.0);
+        let intensity = params.lighting.x + key * params.key_light.w + fill * params.fill_light.w;
+        out.color = vec4<f32>(linear_to_srgb(clamp(srgb_to_linear(params.color.rgb) * intensity,
+                                                 vec3<f32>(0.0), vec3<f32>(1.0))), 1.0);
+    }
     return out;
 }
 """
@@ -93,11 +117,16 @@ class _OffscreenRenderer:
         started = perf_counter()
         camera_from_world = np.linalg.inv(camera_tf)
         encoder = self.device.create_command_encoder()
+        light = camera.rgb_lighting
+        light_uniforms = ([*light.key_direction, light.key_intensity,
+                           *light.fill_direction, light.fill_intensity,
+                           light.ambient, light.key_power, 1., 0.] if light else [0.] * 12)
         render_pass = encoder.begin_render_pass(
             color_attachments=[{'view': texture.create_view(), 'resolve_target': None,
-                                'clear_value': (0, 0, 0, 0),
+                                'clear_value': clear,
                                 'load_op': 'clear', 'store_op': 'store'}
-                               for texture in (self.depth, self.rgb)],
+                               for texture, clear in ((self.depth, (0, 0, 0, 0)),
+                                                      (self.rgb, (*camera.rgb_background, 1)))],
             depth_stencil_attachment={'view': self.zbuffer.create_view(),
                                       'depth_clear_value': 1.0,
                                       'depth_load_op': 'clear', 'depth_store_op': 'store'})
@@ -124,7 +153,7 @@ class _OffscreenRenderer:
                 active_draws.add(key)
                 if key not in self._draws:
                     uniform = self.device.create_buffer(
-                        size=112, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
+                        size=160, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
                     bind_group = self.device.create_bind_group(
                         layout=self.pipeline.get_bind_group_layout(0),
                         entries=[{'binding': 0, 'resource': {'buffer': uniform}}])
@@ -133,7 +162,7 @@ class _OffscreenRenderer:
                 data = np.concatenate(((camera_from_owner @ model.loc_tf).T.ravel(),
                                        [k.fx, k.fy, k.cx, k.cy],
                                        [k.width, k.height, far / (far-near), far*near / (far-near)],
-                                       [*model.rgb, 1.0])).astype(np.float32)
+                                       [*model.rgb, 1.0], light_uniforms)).astype(np.float32)
                 self.device.queue.write_buffer(uniform, 0, data)
                 vertices, indices, count = self._meshes[geom]
                 render_pass.set_bind_group(0, bind_group)

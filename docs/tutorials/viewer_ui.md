@@ -18,6 +18,8 @@ The coordinate axes follow the selected node; toggle **Show coordinate axes**
 to hide or show them. Drag a panel heading to move it;
 close the joint/node panels with × and reopen them with **Show controls**.
 Joint and position sliders update the scene while dragging.
+Hold the Joint 1 buttons or the left/right arrow keys to move that joint in
+one-degree steps. Press H to restore the home pose.
 
 ## Python API
 
@@ -146,6 +148,46 @@ python -m examples.viewer_images --camera
 
 The second command uses the existing `VirtualD405` and requires its GPU renderer.
 Image encoding uses Pillow, included in the project's dependencies.
+
+## Button repeat and shortcuts
+
+`on_click` is the activation callback for both ordinary and repeating buttons.
+It takes no arguments. Defaults are `repeat=False`, `repeat_hz=10` and
+`shortcut=None`.
+
+```python
+panel.add_button('step_right', label='Step right', on_click=step_right,
+                  repeat=True, repeat_hz=10, shortcut='ArrowRight')
+panel.add_button('reset', label='Reset', on_click=reset, shortcut='h')
+```
+
+With `repeat=True`, pressing the button calls `on_click` immediately, then
+repeats while held. `repeat_hz` is a positive finite rate in callbacks per second;
+busy ticks are skipped while waiting for Python. Release stops future ticks,
+without a second click or a queue to drain. An already-sent callback may still
+complete. Pointer cancellation, focus loss, a hidden tab/control, disabling,
+disconnecting and callback errors also stop repetition.
+
+`shortcut` uses a single [KeyboardEvent.key](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key)
+such as `'w'`, `'ArrowRight'`, `'Enter'`, or `' '` for Space. Letters match
+regardless of case. Tab and modifier-only bindings are reserved; key combinations
+are not supported. Ctrl/Alt/Meta shortcuts and text composition are left alone.
+
+A shortcut activates once on keydown, or repeats at `repeat_hz` when enabled.
+Operating-system key repeat does not add extra activations. Focused repeating
+buttons also accept Enter and Space. Ordinary buttons keep native click behavior.
+The implementation uses `pointerdown`/`pointerup` and `keydown`/`keyup`; no new
+wire event type is needed.
+
+Shortcuts work only for visible, enabled controls. They do not intercept typing
+or keys directed at an input or dropdown. Enter and Space on another button keep
+that button's native behavior. A claimed shortcut is not
+also sent to the scene's key handlers. Assign distinct shortcuts; if two visible
+buttons share one, the first registered button handles it. The key hint is shown
+on the button and exposed through `aria-keyshortcuts`.
+
+Browser-only `Button` widgets use `onClick` with the same `repeat`, `repeat_hz`
+and `shortcut` options. Destroying a widget removes its keyboard listeners.
 
 ## Slider updates
 

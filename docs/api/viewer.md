@@ -71,3 +71,4 @@ _UI message contract and pure validation, without sockets, DOM or callbacks._
 - `slider_value(control, value)` — Validate bounds and snap to the native range input's step lattice.
 - `select_value(control, value)` — Accept only one of the dropdown's string options.
 - `checkbox_value(value)` — Accept only booleans, including an explicit False for unchecked.
+- `shortcut_key(value)` — Validate one KeyboardEvent.key; reserve Tab and modifier keys.

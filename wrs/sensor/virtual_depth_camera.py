@@ -13,6 +13,7 @@ from wrs.scene.scene_object import SceneObject
 from wrs.utils.math import ensure_tf
 from .camera_model import CameraModel
 from .depth_noise import StereoDepthNoise
+from .rgb_lighting import RGBLighting
 
 
 @dataclass(frozen=True)
@@ -23,7 +24,7 @@ class DepthFrame:
     geometric render within the render clipping planes, before sensor range,
     noise and quantization; depth is the measurement. Zero denotes invalid
     depth. depth_raw is uint16 with depth = depth_raw * depth_scale. rgb is
-    uint8 (H, W, 3), unlit visual-model color registered to this camera.
+    uint8 (H, W, 3), registered to this camera, optionally matte-lit.
     """
 
     camera_model: CameraModel
@@ -37,6 +38,7 @@ class DepthFrame:
     points_cam_image: np.ndarray
     points_world_image: np.ndarray
     confidence: np.ndarray
+    noise_debug: dict | None = None
 
     @property
     def depth_m(self):
@@ -110,6 +112,10 @@ class VirtualDepthCamera(SceneObject):
         Optional single-view sensor approximation; defaults to no noise.
     seed : int or None
         Seed for an independent numpy random generator per camera.
+    rgb_lighting : RGBLighting or None
+        Optional camera-relative matte lighting. None retains unlit RGB.
+    rgb_background : tuple
+        Background sRGB in [0, 1]. Independent of invalid depth (always zero).
     pos, rotmat : array-like, optional
         Optical frame pose in the world (+X right, +Y down, +Z forward).
 
@@ -118,7 +124,7 @@ class VirtualDepthCamera(SceneObject):
     Inherits SceneObject for ``robot.mount(camera, link, loc_tf)``. The camera
     has no body mesh by default and excludes itself during capture. Meshes
     with alpha > 0 are opaque sensor surfaces; transparent optics, textures,
-    lighting and actual stereo matching are not simulated. Brown-Conrady
+    cast shadows and actual stereo matching are not simulated. Brown-Conrady
     distortion uses a cached inverse-ray LUT and nearest GPU sampling.
     """
 
@@ -127,6 +133,7 @@ class VirtualDepthCamera(SceneObject):
                  distortion_model='none', distortion_coeffs=(0, 0, 0, 0, 0),
                  T_mount_camera=None, min_depth=0.05, max_depth=5.0,
                  depth_scale=0.001, baseline_m=None, noise=None, seed=None,
+                 rgb_lighting=None, rgb_background=(0., 0., 0.),
                  mode='ideal', pos=None, rotmat=None, name='virtual_depth_camera'):
         if camera_model is None:
             width = 640 if width is None else width
@@ -150,17 +157,13 @@ class VirtualDepthCamera(SceneObject):
             raise ValueError('max_depth is not representable with this uint16 depth_scale')
         if baseline_m is not None and (not np.isfinite(baseline_m) or baseline_m <= 0):
             raise ValueError('baseline_m must be positive and finite')
-        noise = StereoDepthNoise() if noise is None else noise
-        if not isinstance(noise, StereoDepthNoise):
-            raise TypeError('noise must be a StereoDepthNoise')
-        if (noise.disparity_std_px or noise.disparity_step_px) and baseline_m is None:
-            raise ValueError('disparity effects require baseline_m')
         if mode not in ('ideal', 'd405_fast'):
             raise ValueError('supported modes are ideal and d405_fast; d405_stereo is not implemented')
         if mode == 'd405_fast' and baseline_m is None:
             raise ValueError('d405_fast requires a positive baseline_m')
-        if mode == 'ideal' and noise != StereoDepthNoise():
-            raise ValueError('enable mode="d405_fast" to use sensor noise')
+        background = np.asarray(rgb_background, dtype=float)
+        if background.shape != (3,) or not np.isfinite(background).all() or np.any((background < 0) | (background > 1)):
+            raise ValueError('rgb_background must contain three finite sRGB values in [0, 1]')
         super().__init__(name=name)
         self.set_pos_rotmat(pos, rotmat)
         self._camera_model = camera_model
@@ -175,7 +178,9 @@ class VirtualDepthCamera(SceneObject):
         self._near, self._far, self._fps = float(near), float(far), float(fps)
         self._mode = mode
         self._T_mount_camera = _rigid_tf(T_mount_camera)
-        self._noise = noise
+        self.noise = noise
+        self.rgb_lighting = rgb_lighting
+        self._rgb_background = tuple(background)
         self._rng = np.random.default_rng(seed)
         self._renderer = None
 
@@ -226,6 +231,32 @@ class VirtualDepthCamera(SceneObject):
     @property
     def noise(self):
         return self._noise
+
+    @noise.setter
+    def noise(self, value):
+        """Change measurement effects for the next capture without rebuilding GPU resources."""
+        value = StereoDepthNoise() if value is None else value
+        if not isinstance(value, StereoDepthNoise):
+            raise TypeError('noise must be a StereoDepthNoise')
+        if (value.disparity_std_px or value.disparity_step_px) and self.baseline_m is None:
+            raise ValueError('disparity effects require baseline_m')
+        if self.mode == 'ideal' and value != StereoDepthNoise():
+            raise ValueError('enable mode="d405_fast" to use sensor noise')
+        self._noise = value
+
+    @property
+    def rgb_lighting(self):
+        return self._rgb_lighting
+
+    @rgb_lighting.setter
+    def rgb_lighting(self, value):
+        if value is not None and not isinstance(value, RGBLighting):
+            raise TypeError('rgb_lighting must be RGBLighting or None')
+        self._rgb_lighting = value
+
+    @property
+    def rgb_background(self):
+        return self._rgb_background
 
     def capture(self, scene, *, T_world_mount=None, exclude=()):
         """Synchronously capture a Scene or iterable of SceneObjects/robot links.

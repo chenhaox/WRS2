@@ -83,3 +83,16 @@ def checkbox_value(value):
     if not isinstance(value, bool):
         raise ValueError('checkbox value must be a bool')
     return value
+
+
+def shortcut_key(value):
+    """Validate one KeyboardEvent.key; reserve Tab and modifier keys."""
+    if value is None:
+        return None
+    from wrs.viewer.key import symbol_from_name
+    if (not isinstance(value, str) or not value
+            or value in ('Tab', 'Alt', 'Control', 'Shift', 'Meta')
+            or (len(value) == 1 and not value.isprintable())
+            or symbol_from_name(value) is None):
+        raise ValueError("shortcut must be a single key such as 'w', 'ArrowRight' or 'Enter'")
+    return value.lower() if len(value) == 1 else value

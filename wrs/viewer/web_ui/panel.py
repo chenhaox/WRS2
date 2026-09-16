@@ -101,9 +101,22 @@ class UIPanel:
         self.configure(visible=False)
 
     def add_button(self, control_id, *, label=None, on_click=None,
+                   repeat=False, repeat_hz=10, shortcut=None,
                    group='', enabled=True):
-        """Add a button whose optional callback takes no arguments."""
-        self._add(control_id, 'button', label, group, enabled, on_click)
+        """Add a button whose on_click callback takes no arguments.
+
+        repeat=True activates on press and repeats while held, capped at
+        repeat_hz. shortcut is a single KeyboardEvent.key, e.g. 'w' or
+        'ArrowRight'. Ordinary buttons still activate on click.
+        """
+        if not isinstance(repeat, bool):
+            raise ValueError('repeat must be a bool')
+        repeat_hz = protocol.finite_number(repeat_hz)
+        if repeat_hz <= 0:
+            raise ValueError('repeat_hz must be positive')
+        self._add(control_id, 'button', label, group, enabled, on_click,
+                  repeat=repeat, repeat_hz=repeat_hz,
+                  shortcut=protocol.shortcut_key(shortcut))
 
     def add_slider(self, control_id, *, min_value=0, max_value=1, step=0.01,
                    value=0, label=None, unit='', on_change=None,

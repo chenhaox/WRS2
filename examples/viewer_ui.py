@@ -120,13 +120,24 @@ def reset_joints():
     status_panel.set_value('status', 'Home pose restored')
 
 
+def nudge_joint(joint, delta):
+    angle = float(np.clip(np.rad2deg(robot.qs[joint]) + delta, -180, 180))
+    move_joint(joint, angle)
+
+
 for joint, angle in enumerate(np.rad2deg(home_qs)):
     arm_panel.add_slider(
         f'joint_{joint + 1}', label=f'Joint {joint + 1}', unit='°',
         min_value=-180, max_value=180, step=1, value=round(float(angle)),
         continuous=True, update_hz=30,
         on_change=lambda value, joint=joint: move_joint(joint, value))
-arm_panel.add_button('reset', label='Home pose', on_click=reset_joints)
+arm_panel.add_button('joint_1_minus', label='Joint 1 − 1°',
+                      on_click=lambda: nudge_joint(0, -1),
+                      repeat=True, repeat_hz=10, shortcut='ArrowLeft')
+arm_panel.add_button('joint_1_plus', label='Joint 1 + 1°',
+                      on_click=lambda: nudge_joint(0, 1),
+                      repeat=True, repeat_hz=10, shortcut='ArrowRight')
+arm_panel.add_button('reset', label='Home pose', on_click=reset_joints, shortcut='h')
 update_position()
 update_joints()
 

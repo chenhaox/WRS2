@@ -85,6 +85,30 @@ class FAFURobotTests(unittest.TestCase):
         arm.remove_from_scene(scene)
         self.assertIsNone(gripper._scene)
 
+    def test_fixed_gripper_preserves_geometry_tcp_and_default_mimic(self):
+        normal = FAFUGripper()
+        original_structure = normal.structure
+        for width in (0, .05, .085):
+            normal.set_opening(width)
+            fixed = FAFUGripper(fixed_opening=width)
+            self.assertEqual(fixed.ndof, 0)
+            self.assertIsNot(fixed.structure, original_structure)
+            np.testing.assert_allclose(fixed.gl_lnk_tfarr, normal.gl_lnk_tfarr, atol=1e-7)
+            np.testing.assert_array_equal(fixed.tcp('grasp_center').tf, normal.tcp('grasp_center').tf)
+            for link, expected in zip(fixed.runtime_lnks, normal.runtime_lnks):
+                self.assertEqual(len(link.collisions), len(expected.collisions))
+                np.testing.assert_array_equal(link.visuals[0].geom.vs, expected.visuals[0].geom.vs)
+            cloned = fixed.clone()
+            cloned.set_opening(width)
+            np.testing.assert_array_equal(cloned.gl_lnk_tfarr, fixed.gl_lnk_tfarr)
+            with self.assertRaises(ValueError):
+                fixed.set_opening(.02 if width != .02 else .03)
+        self.assertEqual(FAFUGripper().ndof, 1)
+        self.assertIsNotNone(original_structure.jnts[1].mmc)
+        for width in (-.01, .086, np.nan, np.inf):
+            with self.assertRaises(ValueError):
+                FAFUGripper(fixed_opening=width)
+
     def test_fk_ik_roundtrip_for_flange_and_mounted_tcp(self):
         # Exercise the public solver hook without building the default large
         # SELIK database; use perturbed seeds, not the known exact solution.

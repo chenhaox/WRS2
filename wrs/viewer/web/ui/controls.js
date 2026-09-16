@@ -11,8 +11,8 @@ class Control {
     this._events = new AbortController();
   }
 
-  _listen(element, event, callback) {
-    element.addEventListener(event, callback, { signal: this._events.signal });
+  _listen(element, event, callback, options = {}) {
+    element.addEventListener(event, callback, { ...options, signal: this._events.signal });
   }
 
   _bindBusyGuard(allowPending = () => false) {
@@ -41,22 +41,122 @@ class Control {
 
 export class Button extends Control {
   constructor({ onClick = () => {}, ...props } = {}) {
-    super('button', props);
+    super('button', { repeat: false, repeat_hz: 10, shortcut: null, ...props });
+    this._onClick = onClick;
     this.input = document.createElement('button');
     this.input.type = 'button';
     this.input.className = 'ui-action';
+    this.caption = document.createElement('span');
+    this.caption.className = 'ui-action-label';
+    this.shortcut = document.createElement('kbd');
+    this.shortcut.className = 'ui-shortcut';
+    this.shortcut.setAttribute('aria-hidden', 'true');
+    this.input.append(this.caption, this.shortcut);
     this.element.appendChild(this.input);
-    this._listen(this.input, 'click', () => {
-      if (this.control.enabled && !this.pending) onClick();
+    this._listen(this.input, 'click', event => {
+      // Pointer repeat already activated on press; release must not click again.
+      if (event.detail > 0 && this._skipClick) { this._skipClick = false; return; }
+      if (this._available() && !this.pending) this._onClick();
     });
-    this._bindBusyGuard();
+    this._listen(this.input, 'pointerdown', event => {
+      this._skipClick = false;
+      if (!this.control.repeat || !this._available() || this._held
+          || event.button !== 0 || !event.isPrimary) return;
+      event.preventDefault();
+      this._skipClick = true;
+      this.input.focus({ preventScroll: true });
+      this._held = { type: 'pointer', id: event.pointerId, target: this.input };
+      this.input.setPointerCapture(event.pointerId);
+      this.input.dataset.held = 'true';
+      this._repeat();
+    });
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+      this._listen(this.input, type, event => {
+        if (this._held?.type === 'pointer' && this._held.id === event.pointerId) this.cancelPending();
+      });
+    }
+    this._listen(document, 'keydown', event => this._keyDown(event), { capture: true });
+    this._listen(document, 'keyup', event => {
+      if (this._held?.type !== 'key' || this._held.id !== (event.code || event.key)) return;
+      event.preventDefault();
+      this.cancelPending();
+    }, { capture: true });
+    this._listen(window, 'blur', () => this.cancelPending());
+    this._listen(document, 'visibilitychange', () => {
+      if (document.hidden) this.cancelPending();
+    });
+    this._listen(document, 'focusin', event => {
+      if (this._held && event.target !== this._held.target) this.cancelPending();
+    });
+    this._bindBusyGuard(() => this.control.repeat);
     this.update();
   }
 
   update(props = {}) {
-    Object.assign(this.control, props);
-    this._updateInput();
-    this.input.textContent = this.pending ? `${this.control.label}…` : this.control.label;
+    const next = { ...this.control, ...props };
+    if (typeof next.repeat !== 'boolean') throw new TypeError('repeat must be a boolean');
+    if (!Number.isFinite(next.repeat_hz) || next.repeat_hz <= 0) throw new RangeError('repeat_hz must be positive');
+    if (next.shortcut !== null && (typeof next.shortcut !== 'string' || !next.shortcut)) {
+      throw new TypeError('shortcut must be a KeyboardEvent.key or null');
+    }
+    if (!next.enabled || next.repeat !== this.control.repeat || next.shortcut !== this.control.shortcut) {
+      this.cancelPending();
+    }
+    Object.assign(this.control, next);
+    this._updateInput(next.repeat);
+    this.caption.textContent = this.pending && !next.repeat ? `${next.label}…` : next.label;
+    this.shortcut.hidden = !next.shortcut;
+    const key = next.shortcut;
+    this.shortcut.textContent = ({ ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', ' ': 'Space' })[key]
+      || (key?.length === 1 ? key.toUpperCase() : key);
+    if (key) this.input.setAttribute('aria-keyshortcuts', key === ' ' ? 'Space' : key === '+' ? 'plus' : key);
+    else this.input.removeAttribute('aria-keyshortcuts');
+  }
+
+  _available() {
+    return this.control.enabled && !document.hidden && this.input.isConnected
+      && this.input.getClientRects().length > 0 && getComputedStyle(this.input).visibility !== 'hidden';
+  }
+
+  _keyDown(event) {
+    if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey
+        || !this._available()) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('input, textarea, select, [contenteditable]')) return;
+    if (target instanceof Element && target.closest('button') && target !== this.input
+        && ['Enter', ' '].includes(event.key)) return;
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    const shortcut = this.control.shortcut;
+    const matches = shortcut && key === (shortcut.length === 1 ? shortcut.toLowerCase() : shortcut);
+    const focused = target === this.input && this.control.repeat && ['Enter', ' '].includes(event.key);
+    if (!matches && !focused) return;
+    event.preventDefault(); // Keep this activation out of the scene's key handlers.
+    if (event.repeat || this._held) return;
+    this._held = { type: 'key', id: event.code || event.key, target };
+    this.input.dataset.held = 'true';
+    this._repeat();
+  }
+
+  _repeat() {
+    if (!this._held || !this._available()) { this.cancelPending(); return; }
+    // Skip busy ticks instead of queuing clicks to run after release.
+    if (!this.pending) this._onClick();
+    if (this._held && this.control.repeat) {
+      this._repeatTimer = setTimeout(() => this._repeat(), Math.min(1000 / this.control.repeat_hz, 2147483647));
+    }
+  }
+
+  cancelPending() {
+    clearTimeout(this._repeatTimer);
+    const held = this._held;
+    this._held = null;
+    delete this.input.dataset.held;
+    if (held?.type === 'pointer' && this.input.hasPointerCapture(held.id)) this.input.releasePointerCapture(held.id);
+  }
+
+  destroy() {
+    this.cancelPending();
+    super.destroy();
   }
 }
 
