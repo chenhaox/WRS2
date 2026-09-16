@@ -177,10 +177,13 @@ class Hub:
             elif kind == "scene_delta":
                 for model_id in header.get("remove", []):
                     self.models.pop(model_id, None)
+                    self.transforms.pop(model_id, None)
                 for entry in header["models"]:
                     self.models[entry["id"]] = entry
                 for meta, fields in wvp.split_geometries(header, blob):
                     self.geoms[meta["id"]] = (meta, fields)
+                used = {entry['geom'] for entry in self.models.values()}
+                self.geoms = {gid: geometry for gid, geometry in self.geoms.items() if gid in used}
         await self._broadcast(message)
 
     def _sync_images(self, state):

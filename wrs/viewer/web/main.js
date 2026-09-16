@@ -141,6 +141,7 @@ function connect(renderer) {
       (header.remove || []).forEach((id) => renderer.remove(id));
       header.geometries.forEach((g) => renderer.addGeometry(readGeometry(g, view)));
       header.models.forEach((e) => renderer.add(e));
+      renderer.pruneGeometries();
     } else if (header.type === 'scene_update') {
       const matrices = view(header.matrices, Float32Array);
       header.ids.forEach((id, i) => renderer.setTransform(

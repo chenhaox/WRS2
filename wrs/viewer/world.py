@@ -315,6 +315,10 @@ class World:
                     [(mid, current[mid]) for mid in added], sent_geoms)
                 await ws.send(wvp.scene_message(
                     'scene_delta', models, geometries, remove=removed))
+                # Peers release unreferenced geometry after each delta. Forget
+                # it too, so removing and later re-adding an object uploads it.
+                sent_geoms.intersection_update(
+                    wvp.model_entry(model, mid)['geom'] for mid, model in current.items())
                 live = set(current)
                 prev_ids = None            # the id list moved; resend it all
             if self.caption != sent_caption:

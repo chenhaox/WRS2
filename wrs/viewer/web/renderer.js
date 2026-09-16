@@ -235,13 +235,22 @@ export class Renderer {
     this.geometries.clear();
   }
 
-  /** Drop one model -- the page half of a scene_delta removal.  Its geometry
-   *  stays: other models may share it, and the next scene_init frees it. */
+  /** Drop one model; shared geometry is collected after the complete delta. */
   remove(id) {
     const model = this.models.get(id);
     if (!model) return;
     model.buffers.forEach((buffer) => buffer.destroy());
     this.models.delete(id);
+  }
+
+  pruneGeometries() {
+    const used = new Set([...this.models.values()].map(model => model.geometry));
+    for (const [id, geometry] of this.geometries) {
+      if (!used.has(geometry)) {
+        geometry.buffers.forEach(buffer => buffer.destroy());
+        this.geometries.delete(id);
+      }
+    }
   }
 
   /**
