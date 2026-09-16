@@ -1,7 +1,7 @@
 """Cartesian jogging of a FAFU arm in contact with Citrus V2 foliage/fruit.
 
-Fixed-orientation TCP paths become rate-limited native position-servo targets.
-Only the arm has actuators; the plant retains its passive V2 joints.
+TCP pose paths and gripper opening become rate-limited position-servo targets.
+The arm and fingers have actuators; the plant retains its passive V2 joints.
 """
 from pathlib import Path
 import argparse
@@ -26,6 +26,21 @@ from agriculture.dynamic import DynamicPlantBuilder
 from examples.agriculture.fafu_d405 import MountedD405
 
 DEFAULT_CONFIG = CONFIG_DIR / 'presets/lab_citrus_robot.json'
+
+
+class _ServoGripper(FAFUGripper):
+    """Simulate both fingers; equal targets allow asymmetric contact response."""
+
+    _structure = None
+
+    @classmethod
+    def _build_structure(cls):
+        structure = super()._build_structure()
+        # Kinematic mimic would hide one finger's independently simulated pose.
+        for joint in structure.jnts:
+            joint.mmc = None
+        structure.compile()
+        return structure
 
 
 class RobotPlantInteraction:
@@ -59,10 +74,11 @@ class RobotPlantInteraction:
                 xyz_lengths=(p['pedestal_width'], p['pedestal_width'], p['base_position'][2]),
                 rgb=p['pedestal_color'], collision_type=wuc.CollisionType.AABB, name='arm_pedestal')
             pedestal.add_to_scene(self.scene)
-        self.gripper = FAFUGripper(fixed_opening=p['gripper']['opening_m'])
+        self.gripper = _ServoGripper()
+        self.gripper.set_opening(p['gripper']['opening_m'])
         self.robot.mount(self.gripper, self.robot.tcp('flange').parent_lnk, update=True)
         self.tcp = self.gripper.tcp('grasp_center')
-        self.rgbd = MountedD405(self.robot, self.scene, p['d405'])
+        self.rgbd = MountedD405(self.robot, self.scene, p['d405'], exclude=self.plant.foliage_proxy_visuals)
         self.camera = self.rgbd.camera
         self.presets = self._make_presets()
         self._ready_q = self._solve_tcp(self.presets['ready'], np.deg2rad(p['ik_seed_deg']))
@@ -77,17 +93,28 @@ class RobotPlantInteraction:
                      for i in range(self.robot.ndof)]
         self.actuators = np.array([np.flatnonzero(model.actuator_trnid[:, 0] == jid).item()
                                    for jid in joint_ids])
-        if model.nu != self.robot.ndof:
-            raise RuntimeError('Only the six arm joints may have actuators')
+        finger_ids = [model.joint(self.env.sync.mecj2jnt[self.gripper, i].name).id
+                      for i in range(self.gripper.ndof)]
+        self.gripper_actuators = np.array([np.flatnonzero(model.actuator_trnid[:, 0] == jid).item()
+                                          for jid in finger_ids])
+        if model.nu != len(self.actuators) + len(self.gripper_actuators):
+            raise RuntimeError('Only the arm and fingers may have actuators')
         # Example-specific native position-servo tuning; no changes to robot defaults.
         model.actuator_gainprm[self.actuators, 0] = p['servo_kp']
         model.actuator_biasprm[self.actuators, 1] = -np.asarray(p['servo_kp'])
         model.actuator_biasprm[self.actuators, 2] = -np.asarray(p['servo_kv'])
+        model.actuator_gainprm[self.gripper_actuators, 0] = 800
+        model.actuator_biasprm[self.gripper_actuators, 1:3] = [-800, -10]
+        model.actuator_forcelimited[self.gripper_actuators] = True
+        model.actuator_forcerange[self.gripper_actuators] = [-20, 20]
         model.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
         self.command = self._ready_q.copy()
         self.command_position = self.presets['ready'].copy()
+        self.command_rotation = self.tool_rotation.copy()
+        self.gripper_command = p['gripper']['opening_m']
         self.stop_motion()
         self.env.ctrl[self.actuators] = self.command
+        self.env.ctrl[self.gripper_actuators] = self.gripper_command / 2
         self.paused = False
         self.show_forces = False
         self._remainder = 0.0
@@ -140,17 +167,18 @@ class RobotPlantInteraction:
                          fruit=fruit.pos - direction * (radius - p['fruit_push_depth']) - tip_offset)
         return {key: np.asarray(value, dtype=float) for key, value in positions.items()}
 
-    def _solve_tcp(self, position, seed):
-        solutions = self.robot.ik(position, self.tool_rotation, tcp=self.tcp,
+    def _solve_tcp(self, position, seed, rotation=None):
+        rotation = self.tool_rotation if rotation is None else rotation
+        solutions = self.robot.ik(position, rotation, tcp=self.tcp,
                                   qs_active_init=seed, max_iter=self.settings['ik_max_iter'])
         if not solutions:
-            raise ValueError('No nearby IK solution at the fixed tool orientation')
+            raise ValueError('No nearby IK solution for this TCP pose')
         q = np.asarray(solutions[0], dtype=float)
         if (not np.isfinite(q).all() or np.any(q < self.limits[0]) or np.any(q > self.limits[1])):
             raise ValueError('IK solution exceeds joint limits')
         return q
 
-    def set_cartesian_target(self, position):
+    def set_cartesian_target(self, position, rotation=None):
         """Check the entire straight TCP path before changing any command/state.
 
         Short Cartesian waypoints keep seeded IK on the same branch. Linear
@@ -164,28 +192,41 @@ class RobotPlantInteraction:
             raise ValueError('Expected three finite world coordinates in metres')
         if np.any(goal < p['workspace_min']) or np.any(goal > p['workspace_max']):
             raise ValueError('Target outside the configured jogging workspace')
+        rotation = np.asarray(self.target_rotation if rotation is None else rotation, dtype=float)
+        if (rotation.shape != (3, 3) or not np.isfinite(rotation).all()
+                or not np.allclose(rotation.T @ rotation, np.eye(3), atol=1e-6)
+                or not np.isclose(np.linalg.det(rotation), 1, atol=1e-6)):
+            raise ValueError('Expected a 3 by 3 rotation matrix')
         distance = np.linalg.norm(goal - self.command_position)
-        if distance < 1e-9:
+        angle = np.linalg.norm(wum.delta_rotvec_between_rotmats(self.command_rotation, rotation))
+        if distance < 1e-9 and angle < 1e-9:
             self.stop_motion()
             return
-        n = max(1, int(np.ceil(distance / p['cartesian_waypoint_m'])))
+        n = max(1, int(np.ceil(distance / p['cartesian_waypoint_m'])),
+                int(np.ceil(angle / np.deg2rad(2))))
         points = np.linspace(self.command_position, goal, n + 1)
+        rotations = wum.rotmat_slerp(self.command_rotation, rotation, n + 1)
         angles, times = [self.command.copy()], [0.0]
         for i, point in enumerate(points[1:], 1):
-            q = self._solve_tcp(point, angles[-1])
+            q = self._solve_tcp(point, angles[-1], rotations[i])
             max_delta = float(np.max(np.abs(q - angles[-1])))
             if max_delta > np.deg2rad(p['ik_max_step_deg']):
                 raise ValueError('IK jump near a singularity; try a smaller move or another direction')
             duration = max(np.linalg.norm(point - points[i - 1]) / p['cartesian_speed_m_s'],
+                           angle / n / np.deg2rad(20),
                            max_delta / np.deg2rad(p['joint_speed_deg_s']))
             angles.append(q)
             times.append(times[-1] + duration)
         self._path_times = np.asarray(times)
         self._path_angles = np.asarray(angles)
         self._path_positions = points
+        self._path_rotations = rotations
+        self._path_rotvecs = np.array([wum.delta_rotvec_between_rotmats(a, b)
+                                      for a, b in zip(rotations[:-1], rotations[1:])])
         self._motion_elapsed = 0.0
         self.target = angles[-1].copy()
         self.target_position = goal.copy()
+        self.target_rotation = rotation.copy()
         self.motion_status = 'Moving'
 
     @property
@@ -195,17 +236,35 @@ class RobotPlantInteraction:
     def jog(self, axis, distance):
         if axis not in (0, 1, 2) or not np.isfinite(distance):
             raise ValueError('Jog requires axis 0/1/2 and a finite distance')
-        position = self.target_position.copy()
+        # Keep held input at most one step ahead instead of building a long path.
+        position = self.command_position.copy()
         position[axis] += distance
-        self.set_cartesian_target(position)
+        self.set_cartesian_target(position, self.command_rotation)
+
+    def jog_rotation(self, axis, angle):
+        """Rotate about a world axis at the current TCP position (radians)."""
+        if axis not in (0, 1, 2) or not np.isfinite(angle):
+            raise ValueError('Rotation requires axis 0/1/2 and a finite angle')
+        rotation = wum.rotmat_from_axangle(np.eye(3)[axis], angle) @ self.command_rotation
+        self.set_cartesian_target(self.command_position, rotation)
+
+    def set_gripper_opening(self, width):
+        """Set the total opening in metres; native servos move both fingers."""
+        if not np.isfinite(width) or not self.gripper.jaw_range[0] <= width <= self.gripper.jaw_range[1]:
+            raise ValueError('Gripper opening must be between 0 and 0.085 metres')
+        self.gripper_target = float(width)
 
     def stop_motion(self):
         """Hold the current servo command without teleporting the physical arm."""
         self.target = self.command.copy()
         self.target_position = self.command_position.copy()
+        self.target_rotation = self.command_rotation.copy()
+        self.gripper_target = self.gripper_command
         self._path_times = np.array([0.0])
         self._path_angles = self.command[None, :].copy()
         self._path_positions = self.command_position[None, :].copy()
+        self._path_rotations = self.command_rotation[None, :, :].copy()
+        self._path_rotvecs = np.empty((0, 3))
         self._motion_elapsed = 0.0
         self.motion_status = 'Holding target'
 
@@ -219,11 +278,12 @@ class RobotPlantInteraction:
              (self._path_times[i] - self._path_times[i - 1]))
         self.command = (1 - u) * self._path_angles[i - 1] + u * self._path_angles[i]
         self.command_position = (1 - u) * self._path_positions[i - 1] + u * self._path_positions[i]
+        self.command_rotation = wum.rotmat_from_rotvec(u * self._path_rotvecs[i - 1]) @ self._path_rotations[i - 1]
         if self._motion_elapsed >= self.motion_duration:
             self.motion_status = 'Holding target'
 
     def select_pose(self, name):
-        self.set_cartesian_target(self.presets[name])
+        self.set_cartesian_target(self.presets[name], self.tool_rotation)
 
     def _read_contacts(self):
         counts = {}
@@ -257,6 +317,9 @@ class RobotPlantInteraction:
         for _ in range(n):
             self._advance_command(h)
             self.env.ctrl[self.actuators] = self.command
+            # 40 mm/s total opening, with 20 N force limits on each finger.
+            self.gripper_command += np.clip(self.gripper_target - self.gripper_command, -.04 * h, .04 * h)
+            self.env.ctrl[self.gripper_actuators] = self.gripper_command / 2
             self.env.runtime.step()
             self._read_contacts()
         # Physics runs at its native timestep; publish rigid mounts once per frame.
@@ -267,6 +330,8 @@ class RobotPlantInteraction:
         self.env.runtime.forward()
         self.command = self._ready_q.copy()
         self.command_position = self.presets['ready'].copy()
+        self.command_rotation = self.tool_rotation.copy()
+        self.gripper_command = self.settings['gripper']['opening_m']
         self.stop_motion()
         self._remainder = 0.0
         self.contacts, self.contact_samples = {}, {}
@@ -287,7 +352,8 @@ class RobotPlantInteraction:
                     joint_target_deg=np.rad2deg(self.target).tolist(),
                     joint_actual_deg=np.rad2deg(self.robot.qs).tolist(),
                     tcp_target_m=self.target_position.tolist(), tcp_actual_m=self.tcp.pos.tolist(),
-                    gripper_opening_m=self.settings['gripper']['opening_m'], gripper_mode='fixed_opening',
+                    gripper_opening_m=float(np.sum(self.gripper.qs)), gripper_target_m=self.gripper_target,
+                    gripper_actuators=len(self.gripper_actuators), gripper_mode='position_servo',
                     T_flange_cam=self.rgbd.mount_tf.tolist(),
                     motion_status=self.motion_status,
                     plant_deflection_rad=float(np.linalg.norm(self.plant.mech.qs - self._initial_plant_q)),
@@ -298,13 +364,14 @@ class RobotPlantInteraction:
 
 def add_controls(base, demo):
     arm = base.ui.add_panel('arm', title='FAFU Cartesian jog', anchor=Anchor.TOP_LEFT,
-                            width=285, font_size=12, movable=True,
-                            description='World axes: +Y toward the tree, +X right, +Z up. Tool orientation stays fixed.')
+                            width=300, columns=6, font_size=12, movable=True,
+                            description='Hold a key or button to jog. World axes: +Y toward the tree, +X right, +Z up.')
     status = base.ui.add_panel('interaction', title='VirtualD405 / Citrus contact', anchor=Anchor.TOP_RIGHT,
                                width=340, font_size=12, movable=True,
                                description='Live wrist RGB-D. Scroll for contact details. Black depth = invalid/out of range.')
     demo.rgbd.add_controls(status)
     jog_step = [demo.settings['jog_step_m']]
+    rotation_step = [2.0]
 
     def request(action):
         try:
@@ -312,6 +379,7 @@ def add_controls(base, demo):
         except ValueError as error:
             # A rejected path never replaces the previous valid target/path.
             arm.set_value('request', f'Not applied: {error}')
+            raise  # Let the button stop repeating on a rejected move.
         else:
             arm.set_value('request', 'Applied')
         refresh(0)
@@ -319,13 +387,30 @@ def add_controls(base, demo):
     def set_step(value):
         jog_step[0] = value / 1000
 
-    arm.add_slider('step', label='Move per click', unit='mm', min_value=1, max_value=30,
+    arm.add_slider('step', label='Move per step', unit='mm', min_value=1, max_value=30, group='Move',
                    step=1, value=jog_step[0] * 1000, on_change=set_step)
-    for key, label, axis, sign in [('forward', 'Forward +Y', 1, 1), ('backward', 'Backward −Y', 1, -1),
-                                  ('left', 'Left −X', 0, -1), ('right', 'Right +X', 0, 1),
-                                  ('up', 'Up +Z', 2, 1), ('down', 'Down −Z', 2, -1)]:
-        arm.add_button(key, label=label,
+    for key, label, axis, sign, shortcut in [
+            ('up', 'Up +Z', 2, 1, 'q'), ('forward', 'Forward +Y', 1, 1, 'w'), ('down', 'Down −Z', 2, -1, 'e'),
+            ('left', 'Left −X', 0, -1, 'a'), ('backward', 'Back −Y', 1, -1, 's'), ('right', 'Right +X', 0, 1, 'd')]:
+        arm.add_button(key, label=label, group='Move', variant='keycap', column_span=2,
+                       repeat=True, repeat_hz=10, shortcut=shortcut,
                        on_click=lambda axis=axis, sign=sign: request(lambda: demo.jog(axis, sign * jog_step[0])))
+
+    arm.add_slider('rotation_step', label='Rotate per step', unit='°', min_value=1, max_value=10,
+                   step=1, value=rotation_step[0], group='Rotate',
+                   on_change=lambda value: rotation_step.__setitem__(0, value))
+    for axis, sign, shortcut in [(0, 1, 'i'), (1, 1, 'j'), (2, 1, 'u'),
+                                 (0, -1, 'k'), (1, -1, 'l'), (2, -1, 'o')]:
+        arm.add_button(f'rotate_{shortcut}', label=f'{"XYZ"[axis]} {"+" if sign > 0 else "−"}',
+                       group='Rotate', variant='keycap', column_span=2, repeat=True, repeat_hz=10,
+                       shortcut=shortcut, on_click=lambda axis=axis, sign=sign: request(
+                           lambda: demo.jog_rotation(axis, np.deg2rad(sign * rotation_step[0]))))
+
+    arm.add_label('gripper', label='Opening · actual / target', group='Gripper')
+    arm.add_button('open', label='Open', group='Gripper', variant='keycap', column_span=3, shortcut='r',
+                   on_click=lambda: request(lambda: demo.set_gripper_opening(demo.gripper.jaw_range[1])))
+    arm.add_button('close', label='Close', group='Gripper', variant='keycap', column_span=3, shortcut='f',
+                   on_click=lambda: request(lambda: demo.set_gripper_opening(demo.gripper.jaw_range[0])))
 
     def reset():
         demo.reset()
@@ -333,9 +418,7 @@ def add_controls(base, demo):
         refresh(0)
 
     def proxies(checked):
-        for group in demo.plant.foliage_proxies.values():
-            for obj in group:
-                obj.toggle_render_collision = checked
+        demo.plant.show_foliage_proxies(checked)
 
     def collision(checked):
         demo.robot.toggle_render_collision = checked
@@ -346,13 +429,15 @@ def add_controls(base, demo):
         demo.show_forces = checked
         demo._sync_scene()
 
-    arm.add_button('stop', label='Stop motion / hold', on_click=lambda: request(demo.stop_motion))
-    arm.add_button('ready', label='Retract / ready', on_click=lambda: request(lambda: demo.select_pose('ready')))
-    arm.add_button('foliage', label='Touch leaves', on_click=lambda: request(lambda: demo.select_pose('foliage')))
-    arm.add_button('fruit', label=f'Touch {demo.settings["fruit_id"]}', on_click=lambda: request(lambda: demo.select_pose('fruit')))
-    arm.add_button('reset', label='Reset robot and tree', on_click=reset)
-    arm.add_label('gripper', label='FAFUGripper · fixed opening',
-                  value=f'{demo.settings["gripper"]["opening_m"] * 1000:.0f} mm · TCP at flange +Z 170 mm')
+    arm.add_button('stop', label='Stop / hold', group='Actions', column_span=3, shortcut='Escape',
+                   on_click=lambda: request(demo.stop_motion))
+    arm.add_button('ready', label='Retract / ready', group='Actions', column_span=3,
+                   on_click=lambda: request(lambda: demo.select_pose('ready')))
+    arm.add_button('foliage', label='Touch leaves', group='Actions', column_span=3,
+                   on_click=lambda: request(lambda: demo.select_pose('foliage')))
+    arm.add_button('fruit', label=f'Touch {demo.settings["fruit_id"]}', group='Actions', column_span=3,
+                   on_click=lambda: request(lambda: demo.select_pose('fruit')))
+    arm.add_button('reset', label='Reset robot and tree', group='Actions', on_click=reset)
     arm.add_label('request', label='Last request', value='Ready')
     status.add_checkbox('paused', label='Pause physics', on_change=lambda value: setattr(demo, 'paused', value))
     status.add_checkbox('proxies', label='Show foliage contact proxies', on_change=proxies)
@@ -372,6 +457,8 @@ def add_controls(base, demo):
 
     def refresh(dt):
         report = demo.report()
+        arm.set_value('gripper', f'{report["gripper_opening_m"] * 1000:.0f} / '
+                                f'{report["gripper_target_m"] * 1000:.0f} mm')
         status.set_value('time', f'{report["simulated_seconds"]:.1f} s' + (' · paused' if demo.paused else ''))
         status.set_value('motion', report['motion_status'])
         status.set_value('target', ' / '.join(f'{x:.3f}' for x in report['tcp_target_m']))

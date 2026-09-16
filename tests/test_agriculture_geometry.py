@@ -104,8 +104,8 @@ class PlantGeometryTests(unittest.TestCase):
         plant = generate(c)
         d = PlantDynamicsSpec.from_config(plant, c)
         self.assertEqual(d.to_json(), PlantDynamicsSpec.from_json(d.to_json()).validate(plant).to_json())
-        self.assertEqual(len(d.clusters), 51)
-        self.assertEqual(sum(c.dof for c in d.clusters), 54)
+        self.assertEqual(len(d.clusters), 16)
+        self.assertEqual(sum(c.dof for c in d.clusters), 19)
         for key in plant.skeleton.roots:
             self.assertIsNone(d.segment_clusters(plant)[key])
         for mutation in ('missing', 'overlap', 'static_descendant', 'parent', 'dof'):
@@ -117,21 +117,21 @@ class PlantGeometryTests(unittest.TestCase):
             else: bad.clusters[0].dof = 3
             with self.subTest(mutation=mutation), self.assertRaises(ValueError): bad.validate(plant)
 
-    def test_lab_front_canopy_has_contact_ownership(self):
-        # Front is plant-local -Y. Check complete blades, not just attachment
-        # points: leaves rooted behind Y=0 can still obstruct the front view.
+    def test_lab_approach_foliage_has_contact_ownership_with_bounded_cost(self):
+        # Cover the central front approach shoots, not the whole front hemisphere.
         config = load_config()
         plant = generate(config)
         owners = PlantDynamicsSpec.from_config(plant, config).segment_clusters(plant)
-        front_count = 0
-        for leaf in plant.leaves:
-            vertices, _ = leaf_mesh(leaf.length, leaf.width, plant.leaf_shape)
-            vertices = vertices @ np.asarray(leaf.rotmat).T + leaf.position
-            if vertices[:, 1].min() <= 0:
-                front_count += 1
-                self.assertIsNotNone(owners[leaf.parent_segment], leaf.parent_segment)
-        self.assertGreater(front_count, 800)
-        # Preserve the intentional cheaper rear foliage and fixed hard skeleton.
+        required = [f'front_middle_shoot_{i:02d}' for i in range(5)]
+        required += [f'front_lower_shoot_{i:02d}' for i in range(4)]
+        required += ['front_upper_shoot_02', 'front_upper_shoot_03']
+        for root in required:
+            for key in plant.skeleton.descendants(root, include_self=True):
+                self.assertIsNotNone(owners[key], key)
+        contact_count = sum(owners[leaf.parent_segment] is not None for leaf in plant.leaves)
+        self.assertLessEqual(contact_count, 400)
+        self.assertIsNone(owners['apex_shoot_00'])
+        # Preserve the cheaper non-interaction foliage and fixed hard skeleton.
         self.assertTrue(any(owners[leaf.parent_segment] is None for leaf in plant.leaves))
         self.assertTrue(all(owners[s.id] is None for s in plant.branches if s.order <= 1))
 

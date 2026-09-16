@@ -23,7 +23,7 @@ class UIPanel:
 
     def __init__(self, *, title='Scene controls', description='',
                  anchor=Anchor.TOP_RIGHT, offset=24, width=296, height=None, font_size=13,
-                 closable=False, movable=False, visible=True):
+                 closable=False, movable=False, visible=True, columns=1):
         self._session = uuid.uuid4().hex
         self._lock = threading.RLock()
         self._revision = 0
@@ -42,11 +42,11 @@ class UIPanel:
         self._layout = {}
         self.configure(title=title, description=description, anchor=anchor,
                        offset=offset, width=width, height=height, font_size=font_size,
-                       closable=closable, movable=movable, visible=visible)
+                       closable=closable, movable=movable, visible=visible, columns=columns)
 
     def configure(self, *, title=None, description=None, anchor=None,
                   offset=None, width=None, height=_UNSET, font_size=None,
-                  closable=None, movable=None, visible=None):
+                  closable=None, movable=None, visible=None, columns=None):
         """Update heading and layout; sizes are CSS pixels, height=None is auto.
 
         Anchors are top-left, top-right, bottom-left and bottom-right.
@@ -56,6 +56,10 @@ class UIPanel:
         their current values; browser dragging/closing does not change Python state.
         """
         layout = {}
+        if columns is not None:
+            if type(columns) is not int or columns < 1:
+                raise ValueError('columns must be a positive integer')
+            layout['columns'] = columns
         if anchor is not None:
             if anchor not in Anchor.ALL:
                 raise ValueError('unknown panel anchor')
@@ -102,6 +106,7 @@ class UIPanel:
 
     def add_button(self, control_id, *, label=None, on_click=None,
                    repeat=False, repeat_hz=10, shortcut=None,
+                   variant='default', column_span=None,
                    group='', enabled=True):
         """Add a button whose on_click callback takes no arguments.
 
@@ -114,9 +119,14 @@ class UIPanel:
         repeat_hz = protocol.finite_number(repeat_hz)
         if repeat_hz <= 0:
             raise ValueError('repeat_hz must be positive')
+        if not isinstance(variant, str) or not variant or len(variant) > 64:
+            raise ValueError('variant must be a nonempty CSS variant name')
+        if column_span is not None and (type(column_span) is not int or column_span < 1):
+            raise ValueError('column_span must be a positive integer or None')
         self._add(control_id, 'button', label, group, enabled, on_click,
                   repeat=repeat, repeat_hz=repeat_hz,
-                  shortcut=protocol.shortcut_key(shortcut))
+                  shortcut=protocol.shortcut_key(shortcut),
+                  variant=variant, column_span=column_span)
 
     def add_slider(self, control_id, *, min_value=0, max_value=1, step=0.01,
                    value=0, label=None, unit='', on_change=None,

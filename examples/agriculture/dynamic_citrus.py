@@ -41,9 +41,7 @@ def debug_view(plant, flags, config):
         leaf.alpha = float(flags['LEAVES'])
     for obj in plant.fruits.values():
         obj.alpha = float(flags['FRUITS'])
-    for group in plant.foliage_proxies.values():
-        for obj in group:
-            obj.toggle_render_collision = flags['FOLIAGE_PROXY']
+    plant.show_foliage_proxies(flags['FOLIAGE_PROXY'])
     if flags['SKELETON']:
         for key, link in plant.cluster_links.items():
             stems = [s for s in plant.spec.branches if plant.segment_clusters[s.id] == key]

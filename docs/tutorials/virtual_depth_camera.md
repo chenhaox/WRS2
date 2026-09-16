@@ -4,6 +4,10 @@
 `VirtualD405` 继承它并提供 D405 名义参数。运行不需要浏览器、相机硬件、
 Open3D、CUDA 工具链或其他仿真器，也不读取 Viewer 的 depth buffer。
 
+需要原始双目深度的成片空洞、错配、细结构退化和跨帧状态时，参见
+[D405 raw-like 噪声模型](d405_noise.md)。通过 `noise_config='agriculture_foliage'`
+启用；本页的 `StereoDepthNoise` 保留为兼容旧 GPU 路径。
+
 ## 快速运行
 
 在仓库根目录、安装了项目依赖的 Python 环境中运行：

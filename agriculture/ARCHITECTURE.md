@@ -96,11 +96,13 @@ Applying a world transform does not mutate the spec.
 
 `Scene -> MJWRSConverter -> BodyNode/JointNode -> MJCFCompiler -> MJEnv -> WRS pose sync`
 
-The lab preset selects three fruit-bearing supports and five nearby outer shoots.
-Each root owns its connected descendant subtree. Nested roots are supported and
-validated; unassigned descendants of moving members are rejected. Trunk and thick
-primary branches remain in the fixed root link. The default partition has 8 clusters,
-28 moving geometric segments, 11 passive DOF, and 12 links including the fixed root.
+The lab preset selects three fruit-bearing supports and thirteen nearby outer
+shoots in the central front approach region. The top, rear, and other peripheral
+foliage remain visual-only. Selection is authored in cluster_roots and does not
+change with the viewer camera. Each root owns its connected descendant subtree.
+Nested roots are supported; unassigned descendants of moving members are rejected.
+Trunk and primary branches stay fixed. The partition has 16 clusters, 65 moving
+geometric segments, 19 passive DOF, and 20 links including the fixed root.
 
 The cluster rest frame originates at its root segment start. Its rotation is the
 segment's stored 3×3 frame. Parent-relative joint transforms are
@@ -122,16 +124,24 @@ Actual default thickness is about 3.3–5.2 mm including fold/curl and padding. 
 is a conservative contact approximation; rectangular strip corners still overhang
 the tapered silhouette. The thickness is numerical, not measured leaf thickness.
 
-All boxes of one nonempty cluster share ONE mounted collision-only SceneObject,
-with per-shape local transforms. The lab preset has 155 contacting leaves and
-465 box shapes in 7 compound objects, plus the unchanged 20 visual leaf batches.
-The other 1,373 leaves belong to the static group and remain visual-only.
+All boxes of one nonempty cluster share ONE mounted collision-only SceneObject.
+The lab preset has 399 contacting leaves: 1,197 box shapes in 15 compound objects,
+with 44 visual leaf batches (3 static). The remaining 1,129 leaves are visual-only.
+This bounds the contact workload while retaining the central front approach shoots.
 There are no leaf DOFs or mesh colliders. Empty foliage produces no proxy objects.
-`foliage_proxies[cluster]` remains a list of compound SceneObjects; inspect each
-object's `collisions` for individual strips. `summary().foliage_proxy_count` counts
-shapes, while `foliage_proxy_object_count` counts objects. A strip's world pose is
-`object.tf @ shape.loc_tf`; the compound object's origin is the cluster origin.
-The contact demos select a strip explicitly, instead of targeting the container.
+`foliage_proxies[cluster]` is a list of compound objects; inspect `collisions` for
+individual strips. A strip's world pose is `object.tf @ shape.loc_tf`.
+
+`show_foliage_proxies` batches each compound object's exact boxes into one debug
+mesh, using the existing WRS box geometry. It adds only 15 drawables instead of
+1,197 separately streamed collision models. Debug mounts have no collision/mass
+and are removed when hidden; they follow the same cluster as their physical boxes.
+Exclude `foliage_proxy_visuals` from sensor captures (the robot example does this).
+The ordinary per-shape collision flag is not used for these compound objects.
+
+Summary fields distinguish `foliage_proxy_count` (shapes), `foliage_proxy_object_count`
+(objects), `foliage_contact_leaf_count`, and `visual_only_leaf_count`.
+The demos still select an actual physical strip, not the batched display mesh.
 
 `FoliageProxySettings` uses `sections_per_leaf`, `padding`, and `minimum_thickness`.
 The old coarse-envelope keys `per_cluster` / `minimum_half_extent` are replaced;

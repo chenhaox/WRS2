@@ -84,6 +84,7 @@ nav:
       - Scene & Geometry: tutorials/scene_geometry.md
       - Viewer Controls: tutorials/viewer_ui.md
       - Virtual Depth Camera: tutorials/virtual_depth_camera.md
+      - D405 Raw-like Noise: tutorials/d405_noise.md
       - Collision: tutorials/collision.md
       - Grasp Planning: tutorials/grasp_planning.md
       - Motion Planning: tutorials/motion_planning.md

@@ -2,7 +2,7 @@
 
 No MJCF strings, engine body IDs, plant controllers, or per-leaf bodies here.
 """
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import numpy as np
 from wrs import wum, wuc, wsso, wssop
 from wrs.scene.collision_shape import CapsuleCollisionShape, OBBCollisionShape
@@ -28,6 +28,7 @@ class DynamicPlantInstance:
     segment_clusters: dict
     leaf_clusters: dict
     cluster_frames: dict
+    foliage_proxy_visuals: list = field(default_factory=list)
 
     @property
     def fruit_objects(self):
@@ -43,6 +44,39 @@ class DynamicPlantInstance:
     def set_pos_rotmat(self, pos=None, rotmat=None):
         self.mech.set_pos_rotmat(pos, rotmat)
         return self
+
+    def show_foliage_proxies(self, visible=True):
+        """Draw the exact contact boxes in one debug mesh per compound body.
+
+        The ordinary per-shape collision toggle would stream/draw thousands of
+        separate models. These display-only mounts leave the physics unchanged;
+        exclude foliage_proxy_visuals from sensor captures.
+        """
+        for group in self.foliage_proxies.values():
+            for obj in group:
+                obj.toggle_render_collision = False
+        if not visible:
+            for obj in self.foliage_proxy_visuals:
+                self.mech.unmount(obj)
+            self.foliage_proxy_visuals.clear()
+            return
+        if self.foliage_proxy_visuals:
+            return
+        for owner, group in self.foliage_proxies.items():
+            for proxy in group:
+                vertices, faces, offset = [], [], 0
+                for shape in proxy.collisions:
+                    geom, tf = shape.geom, shape.loc_tf
+                    vertices.append(geom.vs @ tf[:3, :3].T + tf[:3, 3])
+                    faces.append(geom.fs + offset)
+                    offset += len(geom.vs)
+                if not vertices:
+                    continue
+                obj = wssop.mesh(np.concatenate(vertices), np.concatenate(faces),
+                    rgb=wuc.BasicColor.ORANGE, alpha=wuc.ALPHA.TRANSPARENT,
+                    name=f'{proxy.name}_debug')
+                self.mech.mount(obj, self.cluster_links[owner], update=True)
+                self.foliage_proxy_visuals.append(obj)
 
     def summary(self):
         contact_leaves = sum(self.segment_clusters[leaf.parent_segment] is not None for leaf in self.spec.leaves)

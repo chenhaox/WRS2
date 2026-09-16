@@ -41,7 +41,8 @@ class Control {
 
 export class Button extends Control {
   constructor({ onClick = () => {}, ...props } = {}) {
-    super('button', { repeat: false, repeat_hz: 10, shortcut: null, ...props });
+    super('button', { repeat: false, repeat_hz: 10, shortcut: null,
+      variant: 'default', column_span: null, ...props });
     this._onClick = onClick;
     this.input = document.createElement('button');
     this.input.type = 'button';
@@ -94,6 +95,10 @@ export class Button extends Control {
 
   update(props = {}) {
     const next = { ...this.control, ...props };
+    if (typeof next.variant !== 'string' || !next.variant) throw new TypeError('variant must be a CSS variant name');
+    if (next.column_span !== null && (!Number.isInteger(next.column_span) || next.column_span < 1)) {
+      throw new RangeError('column_span must be a positive integer or null');
+    }
     if (typeof next.repeat !== 'boolean') throw new TypeError('repeat must be a boolean');
     if (!Number.isFinite(next.repeat_hz) || next.repeat_hz <= 0) throw new RangeError('repeat_hz must be positive');
     if (next.shortcut !== null && (typeof next.shortcut !== 'string' || !next.shortcut)) {
@@ -103,6 +108,8 @@ export class Button extends Control {
       this.cancelPending();
     }
     Object.assign(this.control, next);
+    this.element.dataset.variant = next.variant;
+    this.element.style.gridColumn = next.column_span === null ? '' : `span ${next.column_span}`;
     this._updateInput(next.repeat);
     this.caption.textContent = this.pending && !next.repeat ? `${next.label}…` : next.label;
     this.shortcut.hidden = !next.shortcut;

@@ -5,7 +5,7 @@ const ANCHORS = new Set(['inline', 'top-left', 'top-right', 'bottom-left', 'bott
 
 export class Panel {
   constructor({ title = '', description = '', container = null,
-                anchor = 'inline', offset = 24, width = 296, height = null,
+                anchor = 'inline', offset = 24, width = 296, height = null, columns = 1,
                 fontSize = 13, closable = false, movable = false, visible = true } = {}) {
     this._events = new AbortController();
     this._children = new Set();
@@ -71,7 +71,7 @@ export class Panel {
     }
     window.addEventListener('resize', () => this._placePosition(), { signal: this._events.signal });
     this.update({ title, description, fontSize, closable, movable, visible });
-    this.setLayout({ anchor, offset, width, height });
+    this.setLayout({ anchor, offset, width, height, columns });
     if (container) this.mount(container);
   }
 
@@ -136,6 +136,7 @@ export class Panel {
 
   setLayout(options = {}) {
     const layout = { ...this.layout, ...options };
+    if (!Number.isInteger(layout.columns) || layout.columns < 1) throw new RangeError('columns must be a positive integer');
     if (!ANCHORS.has(layout.anchor)) throw new RangeError('unknown panel anchor');
     if (!Number.isFinite(layout.offset) || layout.offset < 0
         || !Number.isFinite(layout.width) || layout.width <= 0) {
@@ -156,6 +157,7 @@ export class Panel {
   _applyLayout() {
     const { anchor, offset, width, height } = this.layout;
     const style = this.element.style;
+    style.setProperty('--ui-columns', this.layout.columns);
     const inline = anchor === 'inline';
     const viewport = this.container === document.body;
     style.position = inline ? 'relative' : (viewport ? 'fixed' : 'absolute');

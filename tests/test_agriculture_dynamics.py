@@ -47,7 +47,7 @@ class PlantIntegrationTests(unittest.TestCase):
     def test_native_contact_shapes_no_self_contact_no_leaf_dofs(self):
         plant = self.build(); scene = wss.Scene(); plant.add_to_scene(scene)
         env = MJEnv(scene, require_ctrl=True)
-        self.assertEqual((env.model.nv, env.model.nu), (54, 0))
+        self.assertEqual((env.model.nv, env.model.nu), (19, 0))
         self.assertTrue(all(not leaf.collisions for leaf in plant.leaf_objects))
         for shape, role in plant.collision_roles.items():
             self.assertIsInstance(shape, {'TRUNK': CapsuleCollisionShape, 'HARD_BRANCH': CapsuleCollisionShape,
@@ -57,10 +57,10 @@ class PlantIntegrationTests(unittest.TestCase):
         self.assertEqual(env.model.nmesh, 0)
         self.assertTrue(all(obj.mounted_by is plant.mech and not obj.is_floating for obj in plant.fruits.values()))
         summary = plant.summary()
-        self.assertEqual(summary['foliage_contact_leaf_count'], 1234)
-        self.assertEqual(summary['visual_only_leaf_count'], 294)
-        self.assertEqual(summary['foliage_proxy_count'], 3702)
-        self.assertEqual(summary['foliage_proxy_object_count'], 50)
+        self.assertEqual(summary['foliage_contact_leaf_count'], 399)
+        self.assertEqual(summary['visual_only_leaf_count'], 1129)
+        self.assertEqual(summary['foliage_proxy_count'], 1197)
+        self.assertEqual(summary['foliage_proxy_object_count'], 15)
         for owner, objects in plant.foliage_proxies.items():
             count = sum(plant.segment_clusters[leaf.parent_segment] == owner for leaf in plant.spec.leaves)
             self.assertEqual(sum(len(obj.collisions) for obj in objects),
@@ -115,6 +115,40 @@ class PlantIntegrationTests(unittest.TestCase):
                 pairs = [{int(env.model.geom_bodyid[c.geom1]), int(env.model.geom_bodyid[c.geom2])}
                          for c in env.data.contact]
                 self.assertIn({body, probe_body}, pairs)
+
+    def test_proxy_debug_batches_follow_boxes_without_changing_physics(self):
+        from wrs.viewer.protocol import iter_scene_models
+        plant = self.build()
+        scene = wss.Scene()
+        plant.add_to_scene(scene)
+        original = MJEnv(scene, require_ctrl=True)
+        original_count = len(tuple(scene))
+        original_models = len(list(iter_scene_models(scene)))
+        signature = (original.model.nv, original.model.nu, original.model.ngeom)
+        plant.show_foliage_proxies()
+        plant.show_foliage_proxies()  # idempotent
+        self.assertEqual(len(plant.foliage_proxy_visuals), 15)
+        self.assertEqual(len(list(iter_scene_models(scene))) - original_models, 15)
+        debug_env = MJEnv(scene, require_ctrl=True)
+        self.assertEqual((debug_env.model.nv, debug_env.model.nu, debug_env.model.ngeom), signature)
+        plant.mech.fk(np.linspace(-.05, .05, plant.mech.ndof))
+        plant.set_pos_rotmat((.4, -.3, .1), wum.rotmat_from_euler(.4, -.2, .7))
+        proxies = [obj for group in plant.foliage_proxies.values() for obj in group]
+        for proxy, debug in zip(proxies, plant.foliage_proxy_visuals):
+            self.assertFalse(proxy.toggle_render_collision)
+            self.assertFalse(debug.collisions)
+            self.assertEqual(len(debug.visuals), 1)
+            np.testing.assert_allclose(debug.tf, proxy.tf, atol=1e-7)
+            expected = np.concatenate([shape.geom.vs @ shape.rotmat.T + shape.pos for shape in proxy.collisions])
+            actual = debug.visuals[0].geom.vs
+            # Mesh welding can reorder vertices; compare rounded point sets.
+            self.assertEqual({tuple(v) for v in np.round(expected, 6)},
+                             {tuple(v) for v in np.round(actual, 6)})
+        plant.show_foliage_proxies(False)
+        plant.show_foliage_proxies(False)
+        self.assertFalse(plant.foliage_proxy_visuals)
+        self.assertEqual(len(tuple(scene)), original_count)
+        self.assertEqual(len(list(iter_scene_models(scene))), original_models)
 
     def test_real_proxy_push_rebound_and_settling(self):
         plant = self.build(); scene = wss.Scene(); plant.add_to_scene(scene)

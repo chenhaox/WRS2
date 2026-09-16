@@ -80,7 +80,13 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-.wrs-ui-panel .ui-controls { padding: 0 16px 2px; }
+.wrs-ui-panel .ui-controls {
+  display: grid;
+  grid-template-columns: repeat(var(--ui-columns, 1), minmax(0, 1fr));
+  column-gap: 8px;
+  padding: 0 16px 2px;
+}
+.wrs-ui-panel .ui-control, .wrs-ui-panel .ui-group { grid-column: 1 / -1; min-width: 0; }
 .wrs-ui-panel .ui-group {
   margin: 6px 0 10px;
   padding-top: 12px;
@@ -209,6 +215,35 @@
   font: inherit;
   font-size: .85em;
   font-weight: 400;
+}
+/* Variants style the same button; layout and interaction remain independent. */
+.wrs-ui-panel [data-variant='keycap'] .ui-action {
+  flex-direction: column;
+  gap: 2px;
+  min-height: 58px;
+  height: 100%;
+  padding: 5px 3px;
+  border: 2px solid var(--ui-key-border, #424b47);
+  border-radius: 8px;
+  color: var(--ui-ink);
+  background: var(--ui-key-background, #fff);
+  box-shadow: 0 2px 0 #263d3926;
+}
+.wrs-ui-panel [data-variant='keycap'] .ui-shortcut {
+  order: -1;
+  padding: 0;
+  border: 0;
+  font-size: 1.8em;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.wrs-ui-panel [data-variant='keycap'] .ui-action-label { flex: none; font-size: .8em; font-weight: 400; }
+.wrs-ui-panel [data-variant='keycap'] .ui-action:hover { background: #f2f5f3; }
+.wrs-ui-panel [data-variant='keycap'] .ui-action:active,
+.wrs-ui-panel [data-variant='keycap'] .ui-action[data-held='true'] {
+  border-color: var(--ui-accent);
+  background: #e2eee7;
+  box-shadow: none;
 }
 .wrs-ui-panel .ui-label { display: grid; gap: 3px; }
 .wrs-ui-panel .ui-label-name { color: var(--ui-muted); font-size: .85em; }

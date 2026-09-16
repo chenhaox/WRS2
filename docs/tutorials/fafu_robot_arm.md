@@ -80,7 +80,7 @@ MuJoCo 位置伺服执行。越界/不可达/IK 跳变时拒绝整条新路径�
 | 双指夹爪 | FK/mount/开口和碰撞规划可用；**物理 mimic 联动尚未接通**：当前转换器未输出 joint equality，装配体编译为 8 DOF、8 actuators、0 equality，而 WRS 夹爪运动学只有 1 个独立 DOF。不可直接据此宣称单驱动同步夹持仿真已完成。 |
 | 实机控制 | 本次迁移没有导入旧控制器，当前包没有对应的 FAFU 实机通信/执行接口。 |
 
-当前 Citrus 演示使用 6 个机械臂 actuator 和 11 个植物 passive DOF；固定开口夹爪无活动 DOF。
+当前 Citrus 演示使用 6 个机械臂 actuator 和 19 个植物 passive DOF；固定开口夹爪无活动 DOF。
 模型可用于定性接触与路径探索；尚不支持真实硬件动力学预测、标定力控或物理双指抓取。
 后续实现物理开合需补通用 mimic→MuJoCo 约束/驱动映射，再标定连杆与驱动参数。
 
@@ -131,7 +131,7 @@ RGB-D 内参暂用 VirtualD405 名义模型。界面区分“calibrated mount / 
 右侧显示 RGB、深度和点云统计，可叠加世界坐标点云与距离相关深度噪声。
 RGB、depth、点云来自同一 DepthFrame，世界点云用该帧保存的位姿。
 显示点云、调试图形和传感器自身外壳不参与成像；复位清除旧观测。
-机械臂仍为 6 个 actuator，植物仍为 11 个 passive DOF。
+机械臂仍为 6 个 actuator，植物为 19 个 passive DOF。
 尚未接入真实 D405 驱动或视觉伺服。
 
 ## 来源

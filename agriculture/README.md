@@ -72,7 +72,7 @@ TCP 是夹爪抓取中心，位于法兰 +Z 前方 170 mm，朝向保持固定�
 机械臂基座、夹爪开口、示范目标、位置伺服增益、笛卡尔/关节速度、工作区与相机均可调整。
 触碰预设从 `gripper.contact_link` 指定手指的原生网格提取指尖，将实际指尖对准表面。
 示范目标同样走上述笛卡尔路径。它是便于探索接触的局部控制，不是避障轨迹规划。
-只有机械臂有六个 actuator，植物保持 11 个 passive DOF。叶片通过 V2 的枝簇代理接触；
+只有机械臂有六个 actuator，植物使用 19 个 passive DOF。叶片通过 V2 的枝簇代理接触；
 橙子仍与枝条刚性连接，不会抓取或脱落。夹爪连杆沿用原生 ACTIVE 碰撞角色，
 手指与掌部参加真实接触；相机示意外壳只有视觉。
 
@@ -195,7 +195,9 @@ segment 的 local +Z 是生长方向，X/Y 是稳定垂直基；3×3 矩阵列�
 2. 静态比较继续使用 V1 demo 的固定相机和 watch：
    `python -m examples.agriculture.citrus_tree.demo_static_tree --config agriculture/configs/presets/lab_citrus_v2.json --watch`。
    watch 监视指定 preset 文件；修改继承的 species 文件后需要重启。
-3. `dynamics.cluster_roots` 只列选中的枝簇根；成员自动取其子树，嵌套根归最近的 cluster。
+3. `dynamics.cluster_roots` 列出接触枝簇根；成员自动取其子树，嵌套根归最近的 cluster。
+   lab preset 覆盖果枝以及中前部、下前部、上前部较低处的接近枝簇，优先保留末端接近区域。
+   树顶、远侧和其余外围叶片保留视觉；不对整个前半树冠铺满代理。分组不随 viewer 相机切换。
    动态子树不能留下仍固定的后代，独立 dynamics.validate 会拒绝这种断连。
 4. 用 `--case clusters` 检查分组与代理，再调 profile 的 stiffness / damping / limits / mass 参数。
 5. 用 headless push 报告比较偏转、真实代理接触、叶果位移、释放后的振荡与稳定。
@@ -220,14 +222,27 @@ push case 使用真实 MuJoCo 接触；蓝色测试球是唯一有 actuator 的�
 
 ## 当前数量与边界
 
-lab preset：274 segments、1,528 leaves、3 fruits、8 dynamic clusters、11 passive DOF。
-155 片动态簇叶片对应 465 个薄盒碰撞形状，合并在 7 个枝簇碰撞对象中；
-其余 1,373 片固定组叶片目前只有视觉几何。空枝簇不创建叶片代理。
-静态叶片 3 个 batch；动态叶片 20 个 batch，按 cluster 和 shade 分组。WRS articulated links 共 12 个，
-其中 3 个是两自由度弯曲的轻量中间 link。叶片没有独立 body/joint；果实固定 mount，没有额外 DOF。
-`foliage_proxies[cluster]` 返回复合碰撞对象列表，每个对象的 `collisions` 为薄盒列表；
-单个薄盒世界位姿为 `obj.tf @ shape.loc_tf`。接触示例通过 `foliage_shape_index` /
-`push_demo.shape_index` 选择实际接触薄盒，默认选第一片叶子的中段。
+lab preset：274 segments、1,528 leaves、3 fruits、16 dynamic clusters、19 passive DOF。
+399 片枝簇叶片对应 1,197 个薄盒碰撞形状，合并在 15 个枝簇碰撞对象中；
+其余 1,129 片为纯视觉叶片。保留中前部、下前部和果实周围的接触覆盖，树顶及远侧不做全覆盖。
+每片接触叶片仍用 3 段薄盒，厚度、fold/curl 拟合精度不变；主干和一级硬枝仍然固定。
+原始 8 簇方案的前侧覆盖不足；整前半树冠方案的 51 簇/3,702 个形状又增加了交互负担，
+当前采用限定接近区域的 16 簇配置。需要更大接近范围时，在 `dynamics.cluster_roots` 中添加对应细枝根。
+
+动态 builder 共生成 44 个叶片视觉 batch（其中固定组 3 个），按 cluster 和 shade 分组。
+WRS articulated links 共 20 个，其中 3 个为两自由度弯曲的中间 link。
+叶片没有独立 body/joint；果实固定 mount，没有额外 DOF。V1 静态 builder 仍默认叶片无碰撞。
+
+`foliage_proxies[cluster]` 返回复合碰撞对象列表，每个对象的 `collisions` 为实际薄盒列表；
+单个薄盒世界位姿为 `obj.tf @ shape.loc_tf`。显示使用 `plant.show_foliage_proxies(True/False)`，
+把同簇所有真实薄盒合成一个调试网格；整个默认树只增加 15 个绘制模型，避免逐薄盒发送和绘制。
+关闭显示会移除这些视觉 mount，不影响任何碰撞形状、质量或 DOF。
+机器人 UI 和 `dynamic_citrus` 均使用此批量显示。自定义相机采集需
+`camera.capture(scene, exclude=plant.foliage_proxy_visuals)`；机器人内置 RGB-D helper 已自动排除。
+
+`summary()` 的 `foliage_contact_leaf_count` / `visual_only_leaf_count` 给出接触覆盖与纯视觉叶片数。
+UI 在代理开关旁显示数量，headless 报告的 `foliage_coverage` 记录相同信息。
+接触示例通过 `foliage_shape_index` / `push_demo.shape_index` 选择真实接触薄盒。
 
 默认静态形态 bbox 约 `[-.4187,-.3409,-.014] -> [.3288,.2885,1.1762] m`。
 所有 bbox/summary 几何数值是 rest spec 的统计；运行中的世界位姿从 instance 读取。
