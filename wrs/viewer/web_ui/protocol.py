@@ -8,13 +8,30 @@ ui_state: collection session/revision + panels; each panel carries its own
 ui_event: type, panel_id, session, event_id, id, value.
 ui_result: matching panel/session/event/control IDs, ok, optional error, state.
 ui_reset: clear the previous publisher's panels.
+ui_image: binary envelope with panel_id/session/id/stream/sequence/mime/data.
+ui_image_ack: browser -> hub JSON stream/sequence, after image decode.
 
-These JSON messages are separate from viewer.protocol's binary scene stream.
+Image frames reuse viewer.protocol.pack; ordinary UI messages remain JSON.
 Panel existence, enabled state and callback execution belong to the manager
 and panel. Only shape/value rules live here, shared by definitions and updates.
 """
 import math
 from numbers import Real
+
+
+def image_message(*, panel_id, session, id, stream, sequence, mime, data):
+    """Binary ui_image frame using the viewer's existing envelope."""
+    from wrs.viewer.protocol import pack
+    return pack(dict(type='ui_image', panel_id=panel_id, session=session,
+                     id=id, stream=stream, sequence=sequence, mime=mime,
+                     data=dict(off=0, len=len(data))), [data])
+
+
+def image_streams(state):
+    """stream -> (panel ID, panel session, control ID) for the current UI."""
+    return {control['stream']: (panel['id'], panel['session'], control['id'])
+            for panel in state.get('panels', []) for control in panel['controls']
+            if control['kind'] == 'image'}
 
 
 def valid_id(value):

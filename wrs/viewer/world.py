@@ -33,6 +33,7 @@ import wrs.viewer.key as wvk
 import wrs.viewer.protocol as wvp
 from wrs.utils.scheduler import Scheduler
 from wrs.viewer.web_ui import UIManager
+from wrs.viewer.web_ui.protocol import image_streams
 
 _HUB_BOOT_TIMEOUT = 10.0
 
@@ -272,15 +273,26 @@ class World:
 
     async def _send_ui(self, ws):
         revision = None
+        sent_images = {}
+        streams = {}
         while not self._closed:
             # Results include their authoritative snapshot. A later state may
             # already exist; browser revisions prevent an old result reverting it.
             while not self._ui_results.empty():
                 await ws.send(json.dumps(self._ui_results.get_nowait(), allow_nan=False))
+            # Compression runs off the event loop. Definitions follow encoding
+            # so controls removed during encoding cannot send a stale frame.
+            frames = await asyncio.to_thread(self.ui._image_frames, sent_images)
             state = self.ui._snapshot_all(revision)
             if state is not None:
                 await ws.send(json.dumps(state, allow_nan=False))
                 revision = state['revision']
+                streams = image_streams(state)
+                sent_images = {key: value for key, value in sent_images.items() if key in streams}
+            for stream, sequence, message in frames:
+                if stream in streams:
+                    await ws.send(message)
+                    sent_images[stream] = (sequence, time.monotonic())
             await asyncio.sleep(1.0 / self._hz)
 
     async def _send_scene(self, ws, live, sent_geoms):

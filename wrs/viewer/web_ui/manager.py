@@ -1,4 +1,6 @@
 """Named panels, a default panel and UI event routing."""
+import time
+
 from .panel import UIPanel
 from . import protocol
 
@@ -33,7 +35,27 @@ class UIManager(UIPanel):
         if panel_id == 'default':
             raise ValueError('cannot remove the default panel')
         with self._lock:
-            del self._panels[panel_id]
+            panel = self._panels.pop(panel_id)
+            with panel._lock:
+                for image in panel._images.values():
+                    image._close()
+
+    def _image_frames(self, sent):
+        """Called on an encoding worker; image bytes never enter UI snapshots."""
+        with self._lock:
+            images = []
+            for panel in self._panels.values():
+                with panel._lock:
+                    images.extend(panel._images.values())
+        frames = []
+        now = time.monotonic()
+        for image in images:
+            stream = image._identity['stream']
+            frame = image._frame(sent.get(stream), now)
+            if frame is not None:
+                sequence, message = frame
+                frames.append((stream, sequence, message))
+        return frames
 
     def _snapshot_all(self, after_revision=None):
         with self._lock:

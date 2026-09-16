@@ -256,3 +256,90 @@ export class Text extends Control {
     this.output.textContent = this.control.value;
   }
 }
+
+/** Read-only image. Decode before swapping, and always release owned blob URLs. */
+export class ImageView extends Control {
+  constructor(props = {}) {
+    super('image', props);
+    this.label = document.createElement('span');
+    this.label.className = 'ui-label-name';
+    this.viewport = document.createElement('div');
+    this.viewport.className = 'ui-image-viewport';
+    this.placeholder = document.createElement('span');
+    this.placeholder.textContent = 'No image';
+    this.viewport.appendChild(this.placeholder);
+    this.element.append(this.label, this.viewport);
+    this._sequence = -1;
+    this._generation = 0;
+    this._urls = new Set();
+    this._disposed = false;
+    this.update();
+  }
+
+  update(props = {}) {
+    const stream = this.control.stream;
+    Object.assign(this.control, props);
+    if (stream !== this.control.stream) {
+      this._clear();
+      this._sequence = -1;
+    }
+    this.label.textContent = this.control.label;
+    if (this.output) this.output.alt = this.control.label;
+  }
+
+  async setFrame(header, bytes) {
+    if (this._disposed || header.stream !== this.control.stream || header.sequence <= this._sequence) return;
+    this._sequence = header.sequence;
+    if (!header.mime) {
+      this._clear();
+      return;
+    }
+    const generation = ++this._generation;
+    let url;
+    try {
+      if (!['image/png', 'image/jpeg'].includes(header.mime)) throw new Error('Unsupported image');
+      url = URL.createObjectURL(new Blob([bytes], { type: header.mime }));
+      this._urls.add(url);
+      const img = document.createElement('img');
+      img.alt = this.control.label;
+      img.draggable = false;
+      img.src = url;
+      await img.decode();
+      if (this._disposed || generation !== this._generation) return;
+      const previousURL = this._visibleURL;
+      this.output = img;
+      this._visibleURL = url;
+      this.viewport.replaceChildren(img);
+      this.element.removeAttribute('data-error');
+      this._release(previousURL);
+    } catch (error) {
+      if (!this._disposed && generation === this._generation) {
+        this.element.dataset.error = 'true';
+        this.placeholder.textContent = 'Image could not be displayed';
+        if (!this.output) this.viewport.replaceChildren(this.placeholder);
+      }
+    } finally {
+      if (url !== this._visibleURL) this._release(url);
+    }
+  }
+
+  _release(url) {
+    if (url && this._urls.delete(url)) URL.revokeObjectURL(url);
+  }
+
+  _clear() {
+    ++this._generation;
+    for (const url of this._urls) this._release(url);
+    this._visibleURL = null;
+    this.output = null;
+    this.placeholder.textContent = 'No image';
+    this.viewport.replaceChildren(this.placeholder);
+    this.element.removeAttribute('data-error');
+  }
+
+  destroy() {
+    this._disposed = true;
+    this._clear();
+    super.destroy();
+  }
+}

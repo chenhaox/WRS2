@@ -1,6 +1,6 @@
 # Viewer controls
 
-Define buttons, sliders, dropdowns, checkboxes and read-only text from Python. Native HTML
+Define buttons, sliders, dropdowns, checkboxes, images and read-only text from Python. Native HTML
 and CSS draw the panels above the WebGPU canvas, without a frontend framework,
 external fonts or a build step.
 
@@ -56,6 +56,8 @@ strings of up to 128 characters, unique within their panel. Empty panels stay hi
 | `add_select(id, options=[...], value=..., on_change=...)` | Callback with the selected string |
 | `add_checkbox(id, value=False, on_change=...)` | Callback with a bool when toggled |
 | `add_label(id, label=..., value=...)` | Read-only text |
+| `add_image(id, image=..., format='png', max_fps=20)` | Read-only image; returns an `UIImage` handle |
+| `set_image(id, image, color_order='rgb')` | Replace an image; `None` clears it |
 | `set_value(id, value)` | Update a value without invoking its callback |
 | `set_enabled(id, enabled)` | Enable or disable interaction |
 | `remove(id)` | Remove a control |
@@ -69,6 +71,80 @@ panel.add_checkbox('axes', label='Show coordinate axes', value=True,
                    on_change=lambda checked: print('Show axes:', checked))
 panel.set_value('axes', False)  # Uncheck without invoking the callback.
 ```
+
+## Images and live previews
+
+Create an image once, then call `update()` whenever new pixels are available:
+
+```python
+panel = base.ui.add_panel('vision', title='Vision', width=420, movable=True)
+preview = panel.add_image('rgb', label='Camera RGB', format='jpeg', max_fps=20)
+result = panel.add_image('result', label='Algorithm result')
+
+result.update(result_rgb)  # One-off update; defaults to lossless PNG.
+
+def refresh(dt):
+    frame = camera.capture(base.scene)
+    preview.update(frame.rgb)
+
+base.schedule_interval(refresh, interval=1 / 20)
+# base.run() starts publishing and scheduled callbacks.
+```
+
+`add_image()` is also available on `base.ui` for its default panel. It accepts
+`label` and `group`, an optional initial `image`, `format='png'` or `'jpeg'`,
+JPEG `quality=85` (integer 1–95), and positive finite `max_fps=20`.
+The image fills the panel's content width and preserves its aspect ratio.
+
+Supported inputs are NumPy `uint8` arrays of shape `(H, W)` (gray), `(H, W, 3)`
+(RGB), `(H, W, 4)` (RGBA, PNG only), or a PNG/JPEG filesystem path. For OpenCV
+arrays use `preview.update(bgr_image, color_order='bgr')`; files already carry
+RGB colors. Inputs are copied, so callers may reuse their array after `update()`
+returns. The call queues a frame; it does not wait for browser display.
+
+`panel.set_image('rgb', pixels)` addresses the same control by ID. Use
+`preview.clear()` or `panel.set_image('rgb', None)` to show the empty placeholder.
+Removing the control or its panel invalidates its handle; subsequent updates
+raise `RuntimeError`. Images accept no browser input, and `set_value()` is for
+the other control types.
+
+For metric or raw depth, convert to display colors using explicit fixed bounds:
+
+```python
+from wrs.viewer.web_ui import colorize_depth
+
+depth_view = panel.add_image('depth', label='Depth · meters')
+depth_view.update(colorize_depth(
+    frame.depth_m, value_range=(0.07, 0.5), valid_mask=frame.valid_mask))
+```
+
+`colorize_depth()` maps near to blue and far to red, with green in between.
+Nonpositive/nonfinite or masked pixels are black; finite positive values outside
+the bounds are clipped. Bounds use the input's units, and input data is unchanged.
+
+Updates retain only the newest pending frame and are encoded on a worker. No
+image bytes enter ordinary UI state or callback replies. `max_fps` caps sends;
+the effective rate also depends on `World(hz=...)`, capture, encoding and network
+time. The final queued frame is sent even if no more updates follow. Capture
+callbacks themselves remain synchronous; expensive capture can delay other
+main-loop callbacks.
+
+The hub caches one latest frame per image, replays it after page reload, and
+allows one unacknowledged frame per image/browser. Slow decoders skip intermediate
+frames. Disconnects preserve the last displayed image and mark the panel offline;
+new scripts, removed controls and cleared images cannot replay stale pictures.
+Browser blob URLs are released when replaced or destroyed. This is an image
+preview channel over the existing WebSocket, not a guaranteed video frame rate.
+
+Run the NumPy animation, snapshot button and scene slider together:
+
+```sh
+python -m examples.viewer_images
+python -m examples.viewer_images --camera
+```
+
+The second command uses the existing `VirtualD405` and requires its GPU renderer.
+Image encoding uses Pillow, included in the project's dependencies.
 
 ## Slider updates
 
@@ -135,14 +211,15 @@ same layout preserves it. Panels do not automatically avoid each other.
 ```text
 wrs/viewer/
   web_ui/
-    __init__.py       exports Anchor, UIPanel, UIManager
+    __init__.py       exports Anchor, UIPanel, UIManager, UIImage, colorize_depth
     constant.py       Anchor constants
     manager.py        default/named panels and event routing
     panel.py          control definitions, state and callbacks
     protocol.py       JSON message contract and value validation
+    image.py          latest image storage, encoding and depth colorization
   web/ui/
     index.js          browser exports
-    controls.js       Button, Slider, Select, Checkbox, Text
+    controls.js       Button, Slider, Select, Checkbox, Text, ImageView
     panel.js          Panel layout, collapse, close and drag
     python_panel.js   Python state/event binding
     styles.css        shared appearance
@@ -180,7 +257,10 @@ and publishes the resulting state to all connected viewers.
 `ui_result` and `ui_reset`. Events require a panel ID, session ID, event ID and
 control ID. The hub relays messages and caches state for page reloads; the
 manager routes events and the panel runs callbacks. These JSON messages are
-separate from the binary scene protocol in `viewer.protocol`.
+separate from the binary scene protocol in `viewer.protocol`. Images use binary
+`ui_image` messages with panel/session/control IDs, a unique stream ID, monotonic
+sequence, MIME type and encoded bytes. `ui_image_ack` JSON messages terminate at
+the hub after browser decoding; they never invoke Python control callbacks.
 
 Session IDs reject stale events when a script or panel is replaced. Disconnected
 controls are disabled, and actions are not replayed on reconnect. Callback errors

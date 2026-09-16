@@ -8,6 +8,7 @@ import uuid
 
 from .constant import Anchor
 from . import protocol
+from .image import UIImage
 
 _UNSET = object()
 
@@ -34,6 +35,7 @@ class UIPanel:
         self._visible = True
         self._visibility_revision = 0
         self._controls = {}
+        self._images = {}
         self._callbacks = {}
         self._results = OrderedDict()
         self._panel_id = 'default'
@@ -133,6 +135,35 @@ class UIPanel:
         """Add read-only text, updated with set_value()."""
         self._add(control_id, 'label', label, group, True, None, value=str(value))
 
+    def add_image(self, control_id, *, image=None, label=None, group='',
+                  format='png', quality=85, max_fps=20):
+        """Add a read-only image and return its update()/clear() handle.
+
+        Accepts uint8 gray/RGB/RGBA arrays or PNG/JPEG paths. max_fps caps
+        publishing; updates coalesce to the latest frame. Use PNG for RGBA.
+        """
+        handle = UIImage(self._panel_id, self._session, control_id,
+                         format=format, quality=quality, max_fps=max_fps)
+        if image is not None:
+            handle.update(image)
+        with self._lock:
+            self._add(control_id, 'image', label, group, True, None,
+                      stream=handle._identity['stream'])
+            self._images[control_id] = handle
+        return handle
+
+    def set_image(self, control_id, image, *, color_order='rgb'):
+        """Update an image by ID; None clears it. Programmatic only."""
+        with self._lock:
+            self._controls[control_id]  # Preserve KeyError for unknown IDs.
+            if control_id not in self._images:
+                raise ValueError('control is not an image')
+            handle = self._images[control_id]
+        if image is None:
+            handle.clear()
+        else:
+            handle.update(image, color_order=color_order)
+
     def add_checkbox(self, control_id, *, value=False, label=None,
                      on_change=None, group='', enabled=True):
         """Add a checkbox; on_change receives a bool when toggled."""
@@ -161,6 +192,8 @@ class UIPanel:
         """
         with self._lock:
             control = self._controls[control_id]
+            if control['kind'] == 'image':
+                raise ValueError('use set_image() to update images')
             if control['kind'] == 'button':
                 raise ValueError('buttons do not have a value')
             if control['kind'] == 'slider':
@@ -187,6 +220,9 @@ class UIPanel:
         """Remove a control; queued events for it will return an error."""
         with self._lock:
             del self._controls[control_id]
+            image = self._images.pop(control_id, None)
+            if image is not None:
+                image._close()
             self._callbacks.pop(control_id, None)
             self._revision += 1
 
@@ -233,7 +269,7 @@ class UIPanel:
                 control = self._controls.get(control_id)
                 if control is None:
                     raise ValueError('unknown control')
-                if not control['enabled'] or control['kind'] == 'label':
+                if not control['enabled'] or control['kind'] in ('label', 'image'):
                     raise ValueError('control does not accept input')
                 callback = self._callbacks[control_id]
                 if control['kind'] in ('slider', 'select', 'checkbox'):

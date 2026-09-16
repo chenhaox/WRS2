@@ -31,6 +31,7 @@ from websockets.datastructures import Headers
 
 import wrs.viewer.protocol as wvp
 from wrs.viewer.protocol import DEFAULT_PORT
+from wrs.viewer.web_ui.protocol import image_streams
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web')
 
@@ -65,6 +66,11 @@ class Hub:
         self.camera = None
         self.caption = None
         self.ui_state = None
+        self.image_streams = {}
+        self.images = {}  # stream -> (sequence, binary frame), latest only
+        self._image_pending = {}  # viewer -> unacknowledged sequence per stream
+        self._image_sent = {}
+        self._image_tasks = {}  # viewer -> bounded set of image send tasks
         # id -> its latest matrix, accumulated: a page that opens (or
         # reloads) after the script exits would otherwise draw every model at
         # identity, all its links piled on the origin.  Accumulated rather
@@ -113,6 +119,7 @@ class Hub:
                 wvp.SUPERSEDED, 'another script took over')
         self.publisher = websocket
         self.ui_state = None
+        self._sync_images({})
         await self._broadcast(json.dumps({'type': 'ui_reset'}))
         self.seen_client = True
         self._open_page_if_unwatched()
@@ -141,9 +148,24 @@ class Hub:
                 self.caption = payload.get("text")
             elif payload.get('type') == 'ui_state':
                 self.ui_state = message
+                self._sync_images(payload)
         else:
             header, blob = wvp.unpack(message)
             kind = header.get("type")
+            if kind == 'ui_image':
+                stream = header.get('stream')
+                identity = tuple(header.get(key) for key in ('panel_id', 'session', 'id'))
+                if self.image_streams.get(stream) != identity:
+                    return
+                sequence = header.get('sequence')
+                if not isinstance(sequence, int) or sequence < 0:
+                    return
+                if stream in self.images and sequence <= self.images[stream][0]:
+                    return
+                self.images[stream] = (sequence, message)
+                for viewer in list(self.viewers):
+                    self._offer_image(viewer, stream)
+                return
             if kind == "scene_init":
                 self.models = {e["id"]: e for e in header["models"]}
                 self.geoms = {meta["id"]: (meta, fields) for meta, fields
@@ -160,6 +182,43 @@ class Hub:
                 for meta, fields in wvp.split_geometries(header, blob):
                     self.geoms[meta["id"]] = (meta, fields)
         await self._broadcast(message)
+
+    def _sync_images(self, state):
+        self.image_streams = image_streams(state)
+        self.images = {key: value for key, value in self.images.items() if key in self.image_streams}
+        for mapping in (self._image_pending, self._image_sent):
+            for viewer, frames in mapping.items():
+                mapping[viewer] = {key: value for key, value in frames.items() if key in self.image_streams}
+
+    def _offer_image(self, viewer, stream):
+        """One unacknowledged image per viewer/stream; coalesce while decoding."""
+        pending = self._image_pending.get(viewer)
+        latest = self.images.get(stream)
+        if pending is None or latest is None or stream in pending:
+            return
+        sequence, message = latest
+        if self._image_sent[viewer].get(stream, -1) >= sequence:
+            return
+        pending[stream] = sequence
+        self._image_sent[viewer][stream] = sequence
+
+        async def send():
+            try:
+                await viewer.send(message)
+            except websockets.ConnectionClosed:
+                self.viewers.discard(viewer)
+
+        task = asyncio.create_task(send())
+        tasks = self._image_tasks[viewer]
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+
+    def _ack_image(self, viewer, payload):
+        stream, sequence = payload.get('stream'), payload.get('sequence')
+        pending = self._image_pending.get(viewer, {})
+        if isinstance(stream, str) and stream in pending and pending[stream] == sequence:
+            del pending[stream]
+            self._offer_image(viewer, stream)
 
     # --------------------------------------------------------------- viewers
 
@@ -185,7 +244,20 @@ class Hub:
                     {"type": "caption", "text": self.caption}))
             if self.ui_state is not None:
                 await websocket.send(self.ui_state)
+            self._image_pending[websocket] = {}
+            self._image_sent[websocket] = {}
+            self._image_tasks[websocket] = set()
+            for stream in self.images:
+                self._offer_image(websocket, stream)
             async for message in websocket:
+                if isinstance(message, str):
+                    try:
+                        payload = json.loads(message)
+                    except ValueError:
+                        continue
+                    if isinstance(payload, dict) and payload.get('type') == 'ui_image_ack':
+                        self._ack_image(websocket, payload)
+                        continue
                 # events travel the other way: page -> script
                 if self.publisher is not None:
                     await self.publisher.send(message)
@@ -193,6 +265,13 @@ class Hub:
             pass
         finally:
             self.viewers.discard(websocket)
+            self._image_pending.pop(websocket, None)
+            self._image_sent.pop(websocket, None)
+            tasks = self._image_tasks.pop(websocket, set())
+            for task in tasks:
+                task.cancel()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _broadcast(self, message):
         for viewer in list(self.viewers):

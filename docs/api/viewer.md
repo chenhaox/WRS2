@@ -41,6 +41,13 @@ _Web UI constants, following wrs.utils.constant's class/member convention._
 
 - **class `Anchor`** — Panel placement; values remain strings in the browser protocol.
 
+## `wrs.viewer.web_ui.image`
+_Latest-frame image storage, separate from JSON control snapshots._
+
+- `colorize_depth(depth, *, value_range, valid_mask=None)` — Map a 2-D depth array to uint8 RGB (blue to red), invalid pixels black.
+- **class `UIImage`** — A read-only image handle returned by UIPanel.add_image().
+  - methods: `update`, `clear`
+
 ## `wrs.viewer.web_ui.manager`
 _Named panels, a default panel and UI event routing._
 
@@ -51,13 +58,16 @@ _Named panels, a default panel and UI event routing._
 _One Python-owned panel: control state, snapshots and main-loop callbacks._
 
 - **class `UIPanel`** — Define a small control panel and publish immutable state snapshots.
-  - methods: `configure`, `show`, `hide`, `add_button`, `add_slider`, `add_label`, `add_select`, `set_value`, `set_enabled`, `remove`
+  - methods: `configure`, `show`, `hide`, `add_button`, `add_slider`, `add_label`, `add_image`, `set_image`, `add_checkbox`, `add_select`, `set_value`, `set_enabled`, `remove`
 
 ## `wrs.viewer.web_ui.protocol`
 _UI message contract and pure validation, without sockets, DOM or callbacks._
 
+- `image_message(*, panel_id, session, id, stream, sequence, mime, data)` — Binary ui_image frame using the viewer's existing envelope.
+- `image_streams(state)` — stream -> (panel ID, panel session, control ID) for the current UI.
 - `valid_id(value)` — Whether a panel/control/event/session ID is a nonempty bounded string.
 - `is_ui_event(payload)` — Check the event envelope; the addressed panel validates its value.
 - `finite_number(value)` — Accept real finite numbers, excluding booleans and numeric strings.
 - `slider_value(control, value)` — Validate bounds and snap to the native range input's step lattice.
 - `select_value(control, value)` — Accept only one of the dropdown's string options.
+- `checkbox_value(value)` — Accept only booleans, including an explicit False for unchecked.

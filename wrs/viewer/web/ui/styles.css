@@ -199,6 +199,18 @@
 .wrs-ui-panel .ui-label { display: grid; gap: 3px; }
 .wrs-ui-panel .ui-label-name { color: var(--ui-muted); font-size: .85em; }
 .wrs-ui-panel .ui-label-value { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; white-space: pre-wrap; }
+.wrs-ui-panel .ui-image { display: grid; gap: 6px; }
+.wrs-ui-panel .ui-image-viewport {
+  display: grid;
+  place-items: center;
+  min-height: 80px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #18221e;
+  color: #cad6cf;
+}
+.wrs-ui-panel .ui-image img { display: block; width: 100%; height: auto; }
+.wrs-ui-panel .ui-image[data-error='true'] .ui-image-viewport { outline: 1px solid #b35448; }
 .wrs-ui-panel .ui-footer {
   display: flex;
   flex-shrink: 0;

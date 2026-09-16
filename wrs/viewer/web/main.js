@@ -119,7 +119,15 @@ function connect(renderer) {
       return;
     }
     const { header, view } = decode(event.data);
-    if (header.type === 'scene_init') {
+    if (header.type === 'ui_image') {
+      // Acknowledge after decoding. The hub retains only the latest next frame.
+      ui.receiveImage(header, view(header.data, Uint8Array)).finally(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ui_image_ack', stream: header.stream,
+            sequence: header.sequence }));
+        }
+      });
+    } else if (header.type === 'scene_init') {
       // Model ids are per-publisher serials, so a rerun sends a whole new
       // set; without clearing, every rerun piles another copy into the scene
       // and leaks its buffers.

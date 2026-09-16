@@ -1,5 +1,5 @@
 /** Bind Python-owned UI state to native panel components. */
-import { Button, Slider, Select, Checkbox, Text } from './controls.js';
+import { Button, Slider, Select, Checkbox, Text, ImageView } from './controls.js';
 import { Panel } from './panel.js';
 
 export class UIPanel extends Panel {
@@ -140,6 +140,7 @@ export class UIPanel extends Panel {
     if (control.kind === 'checkbox') {
       return new Checkbox({ ...control, onChange: value => this._commit(control.id, value) });
     }
+    if (control.kind === 'image') return new ImageView(control);
     return new Text(control);
   }
 
@@ -232,6 +233,13 @@ export class UIManager {
 
   receiveResult(result) {
     this.panels.get(result.panel_id)?.receiveResult(result);
+  }
+
+  async receiveImage(header, bytes) {
+    const panel = this.panels.get(header.panel_id);
+    if (panel?.state?.session === header.session) {
+      await panel.rows.get(header.id)?.setFrame?.(header, bytes);
+    }
   }
 
   setConnected(online) {
