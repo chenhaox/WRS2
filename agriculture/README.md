@@ -56,6 +56,16 @@ TCP 是蓝色球心，工具朝向保持固定。右侧显示目标/实际 TCP �
 **Reset robot and tree** 恢复初始化后的完整物理状态。复位保留暂停和显示开关状态。
 接触代理、机械臂/枝条/果实碰撞形状和接触力箭头均有独立显示开关。
 
+叶片接触代理采用贴合叶片朝向的分段薄盒：每片参与接触的叶子分为 3 段，
+沿实际 blade mesh 的卷曲方向拟合，保留不同叶片之间的空隙。
+同一枝簇的所有薄盒合并在一个碰撞对象中，仍通过原有簇关节弯曲/回弹。
+`Show foliage contact proxies` 显示实际碰撞形状；取消勾选只隐藏显示，不关闭碰撞。
+可在 `lab_citrus_v2.json` 的 `dynamics.foliage_proxy` 调整 `sections_per_leaf`、
+`padding`（默认每侧 0.5 mm）、`minimum_thickness`（默认全厚 1.5 mm）。
+实际默认法向包络厚约 3.3–5.2 mm，包含叶片折叠、卷曲和外扩，不是实测叶厚。
+薄盒边角仍是矩形近似，叶片随簇刚性运动，不提供单叶柔性变形。
+旧配置的 `per_cluster` / `minimum_half_extent` 需替换为上述参数。
+
 交互参数集中在 `configs/presets/lab_citrus_robot.json`，继承 lab citrus preset：
 机械臂基座、工具尺寸、示范目标、位置伺服增益、笛卡尔/关节速度、工作区与相机均可调整。
 示范目标同样走上述笛卡尔路径。它是便于探索接触的局部控制，不是避障轨迹规划。
@@ -75,6 +85,40 @@ python -m unittest discover -s tests -p "test_robot_citrus_interaction.py" -v
 FAFU 可用于当前定性接触演示，但质量/惯量/电机参数尚未标定，原生双指夹爪的 mimic 也尚未
 转换成 MuJoCo 联动约束，因此本例使用圆头工具，不装双指夹爪。详细调查见
 [FAFU 支持范围](../docs/tutorials/fafu_robot_arm.md#用于-citrus-交互仿真的支持范围)。
+
+### 腕部 VirtualD405
+
+同一个交互 demo 默认安装 VirtualD405。右侧面板显示同次采集的 RGB、深度图、
+有效深度比例、采样点数、深度范围及世界坐标点云 bbox；勾选 **Show world point cloud (cyan)**
+可在三维场景中叠加青色点云。面板向下滚动可使用原有接触、碰撞、暂停等控件。
+默认 320×240、目标采集频率 10 Hz、有效光轴深度 0.07–0.50 m，黑色表示无效深度；
+点云每 4 个像素采样一次。实际采集耗时显示在面板中，首次 GPU 初始化可能较慢。
+RGB/depth 使用当前视觉表面，叶簇接触代理、碰撞线框、力箭头和显示点云不参与成像。
+
+安装参考官方 `fafu_baseV1_d405.urdf` 的 `link6 -> tool_link` 固定变换，
+**该 URDF 没有光学外参**；本例使用明确标为 nominal 的安装估计，并处理当前 WRS
+法兰与 URDF link6 的坐标轴差异。外壳也是程序化示意，不是精确 D405 CAD。
+参数集中在 `configs/presets/lab_citrus_robot.json` 的 `robot_demo.d405`；
+取得标定后替换 `T_tool_optical` 并重启，矩阵定义和来源见
+[安装坐标说明](../docs/tutorials/fafu_robot_arm.md#citrus-中的-virtuald405-安装)。
+相机使用原生 `mount` 跟随实际法兰位姿，不额外施加质量、碰撞或关节。
+
+```python
+# RobotPlantInteraction 实例：
+frame = demo.capture_rgbd()                 # 当前仿真状态的一次观测
+rgb, depth_m = frame.rgb, frame.depth_m      # 同一帧；深度单位 metre
+xyz_world, rgb01 = frame.get_point_cloud(world_frame=True, stride=4)
+T_world_optical = frame.T_world_camera      # 随该帧保存的位姿快照
+# demo.camera 是 VirtualD405；demo.rgbd.last_frame 是最近一帧。
+```
+
+`--headless` 也在接触和撤回时采集，并将点数、范围、位姿写入报告。
+无需安装新依赖或在运行时下载 URDF；沿用 WRS 现有 GPU 离屏相机和 UI 图像控件。
+没有模拟真实曝光、镜头畸变或标定后的 D405 误差。
+
+```powershell
+python -m unittest discover -s tests -p "test_fafu_d405_interaction.py" -v
+```
 
 ## 数据与 API
 
@@ -159,9 +203,14 @@ push case 使用真实 MuJoCo 接触；蓝色测试球是唯一有 actuator 的�
 
 ## 当前数量与边界
 
-lab preset：274 segments、1,528 leaves、3 fruits、8 dynamic clusters、11 passive DOF、12 foliage proxies。
+lab preset：274 segments、1,528 leaves、3 fruits、8 dynamic clusters、11 passive DOF。
+155 片动态簇叶片对应 465 个薄盒碰撞形状，合并在 7 个枝簇碰撞对象中；
+其余 1,373 片固定组叶片目前只有视觉几何。空枝簇不创建叶片代理。
 静态叶片 3 个 batch；动态叶片 20 个 batch，按 cluster 和 shade 分组。WRS articulated links 共 12 个，
 其中 3 个是两自由度弯曲的轻量中间 link。叶片没有独立 body/joint；果实固定 mount，没有额外 DOF。
+`foliage_proxies[cluster]` 返回复合碰撞对象列表，每个对象的 `collisions` 为薄盒列表；
+单个薄盒世界位姿为 `obj.tf @ shape.loc_tf`。接触示例通过 `foliage_shape_index` /
+`push_demo.shape_index` 选择实际接触薄盒，默认选第一片叶子的中段。
 
 默认静态形态 bbox 约 `[-.4187,-.3409,-.014] -> [.3288,.2885,1.1762] m`。
 所有 bbox/summary 几何数值是 rest spec 的统计；运行中的世界位姿从 instance 读取。

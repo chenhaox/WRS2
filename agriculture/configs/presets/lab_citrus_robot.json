@@ -18,6 +18,7 @@
     "fruit_id": "orange_000",
     "foliage_cluster": "fruit_upper",
     "foliage_proxy_index": 0,
+    "foliage_shape_index": 1,
     "approach_direction": [0, 1, 0],
     "ready_offset": [0, -0.30, 0.12],
     "foliage_push_depth": 0.065,
@@ -40,6 +41,33 @@
     "ground_center_xy": [0.0, -0.35],
     "ground_color": [0.83, 0.85, 0.81],
     "smoke_hold_seconds": 4.0,
-    "smoke_release_seconds": 5.0
+    "smoke_release_seconds": 5.0,
+    "d405": {
+      "source_urdf": "https://github.com/FAFU-Robotics/fafu_arm_sdk/blob/4f4a246efe97c51ded89d3fd8a9b9a595238e77f/fafu_robot_python/fafu_robot_description/urdf/fafu_baseV1_d405.urdf",
+      "calibration_status": "nominal; URDF has tool_link but no camera optical extrinsics",
+      "wrs_parent_link": "flange",
+      "urdf_tool_xyz_m": [0.170, 0.0, 0.0],
+      "urdf_tool_rpy_rad": [0.0, 0.0, 0.0],
+      "T_tool_optical": [
+        [0.0, 0.0, 1.0, -0.050],
+        [-1.0, 0.0, 0.0, 0.055],
+        [0.0, -1.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0]
+      ],
+      "width": 320,
+      "height": 240,
+      "fps": 10,
+      "mode": "d405_fast",
+      "seed": 42,
+      "min_depth": 0.07,
+      "max_depth": 0.50,
+      "point_stride": 4,
+      "body_size_m": [0.042, 0.042, 0.023],
+      "body_color": [0.20, 0.24, 0.28],
+      "lens_color": [0.04, 0.38, 0.50],
+      "lens_radius_m": 0.0055,
+      "lens_length_m": 0.002,
+      "cloud_color": [0.05, 0.85, 1.0]
+    }
   }
 }

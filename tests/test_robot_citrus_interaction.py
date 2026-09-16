@@ -11,6 +11,10 @@ class RobotCitrusInteractionTests(unittest.TestCase):
     def setUpClass(cls):
         cls.demo = RobotPlantInteraction()
 
+    @classmethod
+    def tearDownClass(cls):
+        cls.demo.close()
+
     def setUp(self):
         self.demo.paused = False
         self.demo.reset()

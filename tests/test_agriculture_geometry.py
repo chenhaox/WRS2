@@ -13,7 +13,8 @@ from agriculture.config import load_config, GENERIC_CONFIG
 from agriculture.generator import generate
 from agriculture.morphology import apply_pipe_model
 from agriculture.foliage import place_leaves
-from agriculture.geometry import leaf_mesh
+from agriculture.geometry import leaf_mesh, leaf_contact_boxes
+from agriculture.spec import LeafShape
 from agriculture.dynamics import PlantDynamicsSpec
 
 
@@ -116,6 +117,46 @@ class PlantGeometryTests(unittest.TestCase):
             else: bad.clusters[0].dof = 3
             with self.subTest(mutation=mutation), self.assertRaises(ValueError): bad.validate(plant)
 
+    def test_leaf_contact_strips_enclose_blade_without_thick_global_box(self):
+        # Include different station counts: strip boundaries must not leave gaps
+        # when the visual tessellation is not divisible by the strip count.
+        for stations in (7, 8, 11):
+            shape = LeafShape(stations=stations, fold=.22, curl=.06, droop=.12)
+            vs, fs = leaf_mesh(.10, .03, shape)
+            boxes = leaf_contact_boxes(.10, .03, shape, sections=3,
+                                       padding=.0005, minimum_thickness=.0015)
+            other = leaf_contact_boxes(.10, .03, shape, sections=3,
+                                       padding=.0005, minimum_thickness=.0015)
+            # Triangle vertices + barycentres are independent surface probes.
+            samples = np.concatenate((vs, vs[fs].mean(axis=1)))
+            covered = np.zeros(len(samples), dtype=bool)
+            self.assertEqual(len(boxes), 3)
+            for (center, rotation, half), repeated in zip(boxes, other):
+                np.testing.assert_array_equal(np.concatenate((center, rotation.ravel(), half)),
+                                              np.concatenate((repeated[0], repeated[1].ravel(), repeated[2])))
+                np.testing.assert_allclose(rotation.T @ rotation, np.eye(3), atol=1e-12)
+                self.assertAlmostEqual(np.linalg.det(rotation), 1)
+                self.assertLess(2 * half[2], .007)
+                covered |= np.all(np.abs((samples - center) @ rotation) <= half + 1e-12, axis=1)
+            self.assertTrue(covered.all())
+
+    def test_leaf_contact_settings_validation_and_minimum_thickness(self):
+        shape = LeafShape(fold=0, curl=0, droop=0)
+        args = dict(sections=3, padding=0, minimum_thickness=.0015)
+        for _, _, half in leaf_contact_boxes(.1, .03, shape, **args):
+            self.assertAlmostEqual(half[2] * 2, .0015)
+        config = load_config()
+        plant = generate(config)
+        dynamics = PlantDynamicsSpec.from_config(plant, config)
+        for key, bad in [('sections', 0), ('sections', True), ('sections', 7),
+                         ('padding', -.001), ('padding', np.nan), ('minimum_thickness', 0)]:
+            with self.subTest(key=key, bad=bad), self.assertRaises(ValueError):
+                leaf_contact_boxes(.1, .03, shape, **(args | {key: bad}))
+            changed = deepcopy(dynamics)
+            setattr(changed.foliage_proxy, 'sections_per_leaf' if key == 'sections' else key, bad)
+            with self.assertRaises(ValueError):
+                changed.validate(plant)
+
     def test_pure_generation_and_export_block_engine_imports(self):
         code = """
 import importlib.abc, sys
@@ -128,11 +169,13 @@ from agriculture.config import load_config, GENERIC_CONFIG
 from agriculture.generator import generate
 from agriculture.spec import PlantSpec
 from agriculture.dynamics import PlantDynamicsSpec
+from agriculture.geometry import leaf_contact_boxes
 for c in (load_config(), load_config(GENERIC_CONFIG)):
     p = PlantSpec.from_json(generate(c).to_json()).scaled(.8)
     p.summary()
     if 'dynamics' in c:
         PlantDynamicsSpec.from_config(p, c).to_json()
+    leaf_contact_boxes(.1, .03, p.leaf_shape, sections=3, padding=.0005, minimum_thickness=.0015)
 """
         result = subprocess.run([sys.executable, '-c', code], cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -2,12 +2,13 @@
 from copy import deepcopy
 import unittest
 import numpy as np
-from wrs import wss, wum
+from wrs import wss, wum, wssop, wuc
 from agriculture.config import load_config
 from agriculture.generator import generate
 from agriculture.dynamics import PlantDynamicsSpec
 from agriculture.dynamic import DynamicPlantBuilder
 from agriculture.static import StaticPlantBuilder
+from agriculture.spec import PlantSpec, PlantSkeleton, StemSegment, LeafPlacement, LeafShape
 from wrs.physics.mj_env import MJEnv
 from wrs.scene.collision_shape import CapsuleCollisionShape, SphereCollisionShape, OBBCollisionShape
 from examples.agriculture.push_experiment import PushExperiment
@@ -54,7 +55,9 @@ class PlantIntegrationTests(unittest.TestCase):
         self.assertEqual(env.data.ncon, 0)
         self.assertEqual(env.model.nmesh, 0)
         self.assertTrue(all(obj.mounted_by is plant.mech and not obj.is_floating for obj in plant.fruits.values()))
-        self.assertEqual(plant.summary()['foliage_proxy_count'], 12)
+        self.assertEqual(plant.summary()['foliage_proxy_count'], 465)
+        self.assertEqual(plant.summary()['foliage_proxy_object_count'], 7)
+        self.assertLessEqual(sum(map(len, plant.foliage_proxies.values())), len(self.dynamics.clusters))
 
     def test_empty_foliage_fruit_and_nested_clusters(self):
         spec = deepcopy(self.spec)
@@ -85,6 +88,46 @@ class PlantIntegrationTests(unittest.TestCase):
         self.assertGreaterEqual(result['release_oscillation_crossings'], 2)
         self.assertLess(result['final_joint_residual_rad'], .01)
         self.assertLess(result['late_joint_peak_to_peak_rad'], .001)
+
+    def test_leaf_gaps_and_normal_clearance_in_native_collision(self):
+        # Three separated thin leaves on one moving shoot. A probe can pass
+        # between them and above them, but must hit each actual blade.
+        spec = PlantSpec('three_leaves', PlantSkeleton([
+            StemSegment('root', None, (0, 0, 0), (0, 0, .2), .01, .008, 0),
+            StemSegment('shoot', 'root', (0, 0, .2), (0, 0, .4), .003, .002, 1),
+            *[StemSegment(f'twig_{i}', 'shoot', (0, 0, .32), (.02, y, .32), .0005, .0004, 2,
+                          collidable=False, attachment_t=.6) for i, y in enumerate((-.06, 0, .06))]]),
+            leaves=[LeafPlacement(f'twig_{i}', (.02, y, .32), np.eye(3).tolist(), .1, .02, 0)
+                    for i, y in enumerate((-.06, 0, .06))], leaf_shape=LeafShape(fold=0, curl=0, droop=0))
+        config = deepcopy(self.config)
+        config['dynamics']['cluster_roots'] = [dict(id='shoot', root_segment='shoot', dof=1, profile='foliage')]
+        plant = DynamicPlantBuilder(config).build(spec, PlantDynamicsSpec.from_config(spec, config),
+            pos=(.4, -.3, .1), rotmat=wum.rotmat_from_euler(.4, -.2, .7))
+        plant.mech.fk([.25])
+        scene = wss.Scene()
+        plant.add_to_scene(scene)
+        probe = wssop.sphere(radius=.003, collision_type=wuc.CollisionType.SPHERE,
+                             mass=.01, is_floating=True)
+        probe.collision_group = wuc.CollisionGroup.ACTIVE
+        probe.add_to_scene(scene)
+        env = MJEnv(scene)
+        target = plant.foliage_proxies['shoot'][0]
+        self.assertEqual(len(plant.foliage_proxies['shoot']), 1)
+        self.assertEqual(len(target.collisions), 9)
+        self.assertEqual(len(plant.leaf_objects), 1)
+        # Keep the moving cluster and nontrivial world transform in the test;
+        # wrong leaf/cluster/world transforms otherwise pass at the origin.
+        tf = plant.cluster_links['shoot'].tf @ np.linalg.inv(plant.cluster_frames['shoot'])
+        for position, should_hit in [((.07, -.06, .32), True), ((.07, .06, .32), True),
+                                     ((.07, 0, .32), True), ((.07, -.03, .30), False),
+                                     ((.07, -.03, .32), False), ((.07, -.03, .34), False),
+                                     ((.07, .03, .32), False), ((.07, -.06, .335), False),
+                                     ((.14, -.06, .32), False)]:
+            with self.subTest(position=position):
+                probe.pos = tf[:3, :3] @ position + tf[:3, 3]
+                env.sync.push_one_sobj_qpos(probe, probe.quat, probe.pos)
+                env.runtime.forward()
+                self.assertEqual(env.data.ncon > 0, should_hit)
 
 
 if __name__ == '__main__': unittest.main()

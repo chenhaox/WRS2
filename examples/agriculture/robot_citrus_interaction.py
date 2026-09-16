@@ -22,6 +22,7 @@ from agriculture.config import CONFIG_DIR, load_config
 from agriculture.generator import generate
 from agriculture.dynamics import PlantDynamicsSpec
 from agriculture.dynamic import DynamicPlantBuilder
+from examples.agriculture.fafu_d405 import MountedD405
 
 DEFAULT_CONFIG = CONFIG_DIR / 'presets/lab_citrus_robot.json'
 
@@ -68,6 +69,8 @@ class RobotPlantInteraction:
                          wum.tf_from_pos_rotmat((0, 0, p['tool_length'])), update=True)
         self.robot.add_tcp('contact', self.robot.runtime_lnks[-1],
                            wum.tf_from_pos_rotmat((0, 0, p['tool_length'])))
+        self.rgbd = MountedD405(self.robot, self.scene, p['d405'])
+        self.camera = self.rgbd.camera
         self.presets = self._make_presets()
         self._ready_q = self._solve_tcp(self.presets['ready'], np.deg2rad(p['ik_seed_deg']))
         self.robot.fk(self._ready_q)
@@ -123,9 +126,11 @@ class RobotPlantInteraction:
         fruit = self.plant.fruits[p['fruit_id']]
         radius = next(f.radius for f in self.plant.spec.fruits if f.id == p['fruit_id'])
         proxy = self.plant.foliage_proxies[p['foliage_cluster']][p['foliage_proxy_index']]
-        extent = np.sum(np.abs(direction @ proxy.rotmat) * proxy.collisions[0].half_extents)
+        shape = proxy.collisions[p['foliage_shape_index']]
+        shape_tf = proxy.tf @ shape.loc_tf
+        extent = np.sum(np.abs(direction @ shape_tf[:3, :3]) * shape.half_extents)
         positions = dict(ready=fruit.pos + p['ready_offset'],
-                         foliage=proxy.pos - direction * (extent + p['tool_radius'] - p['foliage_push_depth']),
+                         foliage=shape_tf[:3, 3] - direction * (extent + p['tool_radius'] - p['foliage_push_depth']),
                          fruit=fruit.pos - direction * (radius + p['tool_radius'] - p['fruit_push_depth']))
         return {key: np.asarray(value, dtype=float) for key, value in positions.items()}
 
@@ -260,6 +265,13 @@ class RobotPlantInteraction:
         self._remainder = 0.0
         self.contacts, self.contact_samples = {}, {}
         self._sync_scene()
+        self.rgbd.invalidate()
+
+    def capture_rgbd(self, dt=0):
+        return self.rgbd.capture(simulation_time=float(self.env.data.time - self._initial_time))
+
+    def close(self):
+        self.rgbd.close()
 
     def report(self):
         return dict(simulated_seconds=float(self.env.data.time - self._initial_time),
@@ -271,16 +283,18 @@ class RobotPlantInteraction:
                     motion_status=self.motion_status,
                     plant_deflection_rad=float(np.linalg.norm(self.plant.mech.qs - self._initial_plant_q)),
                     fruit_displacement_m={k: float(np.linalg.norm(o.pos - self._initial_fruit[k]))
-                                          for k, o in self.plant.fruits.items()})
+                                          for k, o in self.plant.fruits.items()},
+                    camera=self.rgbd.statistics())
 
 
 def add_controls(base, demo):
     arm = base.ui.add_panel('arm', title='FAFU Cartesian jog', anchor=Anchor.TOP_LEFT,
                             width=285, font_size=12, movable=True,
                             description='World axes: +Y toward the tree, +X right, +Z up. Tool orientation stays fixed.')
-    status = base.ui.add_panel('interaction', title='Citrus contact', anchor=Anchor.TOP_RIGHT,
-                               width=290, font_size=12, movable=True,
-                               description='The blue rounded tool pushes leaves and oranges. Retract to see rebound.')
+    status = base.ui.add_panel('interaction', title='VirtualD405 / Citrus contact', anchor=Anchor.TOP_RIGHT,
+                               width=340, font_size=12, movable=True,
+                               description='Live wrist RGB-D. Scroll for contact details. Black depth = invalid/out of range.')
+    demo.rgbd.add_controls(status)
     jog_step = [demo.settings['jog_step_m']]
 
     def request(action):
@@ -351,18 +365,24 @@ def add_controls(base, demo):
 
     refresh(0)
     base.schedule_interval(refresh, 1 / demo.settings['status_hz'])
+    demo.capture_rgbd()
+    base.schedule_interval(demo.capture_rgbd, 1 / demo.camera.fps)
 
 
-def run_smoke(demo):
+def run_smoke(demo, *, capture_rgbd=False):
     results = {}
     for name in ('foliage', 'fruit'):
         demo.reset()
         demo.select_pose(name)
         travel = demo.motion_duration
         demo.step(travel + demo.settings['smoke_hold_seconds'])
+        if capture_rgbd:
+            demo.capture_rgbd()
         touch = demo.report()
         demo.select_pose('ready')
         demo.step(demo.motion_duration + demo.settings['smoke_release_seconds'])
+        if capture_rgbd:
+            demo.capture_rgbd()
         results[name] = dict(touch=touch, released=demo.report())
     return results
 
@@ -378,19 +398,22 @@ def main():
     if args.duration is not None and (not np.isfinite(args.duration) or args.duration <= 0):
         parser.error('--duration must be finite and positive')
     demo = RobotPlantInteraction(load_config(args.config))
-    if args.headless:
-        report = run_smoke(demo)
-    else:
-        p = demo.settings
-        base = wvw.World(cam_pos=p['camera_pos'], cam_lookat_pos=p['camera_lookat'], port=args.port)
-        base.set_scene(demo.scene)
-        base.set_caption('FAFU / Citrus V2 Cartesian contact')
-        add_controls(base, demo)
-        base.schedule_interval(lambda dt: demo.step(min(dt, p['max_frame_dt'])), 1 / p['control_hz'])
-        if args.duration is not None:
-            base.schedule_once(lambda dt: base.close(), args.duration)
-        base.run()
-        report = demo.report()
+    try:
+        if args.headless:
+            report = run_smoke(demo, capture_rgbd=True)
+        else:
+            p = demo.settings
+            base = wvw.World(cam_pos=p['camera_pos'], cam_lookat_pos=p['camera_lookat'], port=args.port)
+            base.set_scene(demo.scene)
+            base.set_caption('FAFU / Citrus V2 / VirtualD405')
+            add_controls(base, demo)
+            base.schedule_interval(lambda dt: demo.step(min(dt, p['max_frame_dt'])), 1 / p['control_hz'])
+            if args.duration is not None:
+                base.schedule_once(lambda dt: base.close(), args.duration)
+            base.run()
+            report = demo.report()
+    finally:
+        demo.close()
     print(json.dumps(report, indent=2), flush=True)
     if args.report:
         args.report.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')

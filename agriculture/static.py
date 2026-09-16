@@ -100,7 +100,7 @@ def build_tree(spec, config=None, *, pos=None, rotmat=None):
 
 def validate_render_config(spec, config):
     if config["collision"]["leaves_collision"]:
-        raise ValueError("per-leaf collision is unsupported; use dynamic cluster foliage proxies")
+        raise ValueError("static leaf collision is unsupported; use DynamicPlantBuilder foliage proxies")
     visual = config["visual"]
     for key, minimum in (("branch_taper_steps", 1), ("branch_sides", 3),
                          ("fruit_subdivisions", 0), ("stem_sides", 3)):

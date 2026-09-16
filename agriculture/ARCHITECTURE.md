@@ -113,10 +113,31 @@ and shade, never combined across moving links. A fixed mount supplies world pose
 The fruit sphere/stem stay in a named mounted SceneObject; `instance.fruits[id].pos`
 is its current world centre. Geometry/data never store runtime objects or IDs.
 
-Each dynamic cluster receives up to 2 boxes by splitting leaf centres along its
-longest cluster-local span and fitting actual blade vertices. Empty foliage creates
-zero boxes. These are conservative, rigid canopy contact envelopes, not deformable leaves.
-The default yields 12 proxies and 20 leaf batches; there are no leaf DOFs or mesh colliders.
+Each leaf owned by a dynamic cluster receives three thin strip boxes, fitted to
+contiguous stations of the existing blade mesh. Each strip follows its midrib chord
+and encloses fold/curl/droop; its normal follows the blade, not the branch axes.
+Boxes never span different leaves, so the space between separate blades stays open.
+Padding is 0.5 mm per side; minimum normal thickness is 1.5 mm (full extent).
+Actual default thickness is about 3.3–5.2 mm including fold/curl and padding. This
+is a conservative contact approximation; rectangular strip corners still overhang
+the tapered silhouette. The thickness is numerical, not measured leaf thickness.
+
+All boxes of one nonempty cluster share ONE mounted collision-only SceneObject,
+with per-shape local transforms. The lab preset has 155 contacting leaves and
+465 box shapes in 7 compound objects, plus the unchanged 20 visual leaf batches.
+The other 1,373 leaves belong to the static group and remain visual-only.
+There are no leaf DOFs or mesh colliders. Empty foliage produces no proxy objects.
+`foliage_proxies[cluster]` remains a list of compound SceneObjects; inspect each
+object's `collisions` for individual strips. `summary().foliage_proxy_count` counts
+shapes, while `foliage_proxy_object_count` counts objects. A strip's world pose is
+`object.tf @ shape.loc_tf`; the compound object's origin is the cluster origin.
+The contact demos select a strip explicitly, instead of targeting the container.
+
+`FoliageProxySettings` uses `sections_per_leaf`, `padding`, and `minimum_thickness`.
+The old coarse-envelope keys `per_cluster` / `minimum_half_extent` are replaced;
+custom older presets must replace those keys too. Section counts must be positive
+and no larger than `LeafShape.stations - 1`. All strips move rigidly with their
+existing passive cluster; this does not simulate independent leaf deformation.
 
 Wood mass is estimated from tapered-segment volume and configured density. Native
 WRS collision inertia utilities approximate each cluster's inertia, including lumped

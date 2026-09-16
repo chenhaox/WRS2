@@ -32,9 +32,9 @@ class BranchClusterSpec:
 
 @dataclass
 class FoliageProxySettings:
-    per_cluster: int = 2        # maximum; empty groups produce no collider
-    padding: float = .005       # metres, applied after plant scale
-    minimum_half_extent: float = .003
+    sections_per_leaf: int = 3
+    padding: float = .0005      # metres, applied after plant scale
+    minimum_thickness: float = .0015  # full contact thickness along local normal
 
 
 @dataclass
@@ -92,9 +92,9 @@ class PlantDynamicsSpec:
             if owners.get(s.parent_id) is not None and s.id not in owners:
                 raise ValueError(f'{s.id}: descendant of moving segment cannot remain static')
         p = self.foliage_proxy
-        if type(p.per_cluster) is not int or not 1 <= p.per_cluster <= 3:
-            raise ValueError('foliage proxies per cluster must be 1..3')
-        if not np.isfinite([p.padding, p.minimum_half_extent]).all() or p.padding < 0 or p.minimum_half_extent <= 0:
+        if type(p.sections_per_leaf) is not int or not 1 <= p.sections_per_leaf < plant.leaf_shape.stations:
+            raise ValueError('foliage sections_per_leaf must be 1..(leaf stations - 1)')
+        if not np.isfinite([p.padding, p.minimum_thickness]).all() or p.padding < 0 or p.minimum_thickness <= 0:
             raise ValueError('invalid foliage proxy size')
         return self
 

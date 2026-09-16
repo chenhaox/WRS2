@@ -2036,14 +2036,15 @@
       }
     ],
     "foliage_proxy": {
-      "per_cluster": 2,
-      "padding": 0.005,
-      "minimum_half_extent": 0.003
+      "sections_per_leaf": 3,
+      "padding": 0.0005,
+      "minimum_thickness": 0.0015
     }
   },
   "push_demo": {
     "cluster": "fruit_upper",
     "proxy_index": 0,
+    "shape_index": 1,
     "sphere_radius": 0.025,
     "travel": 0.14,
     "clearance": 0.07,

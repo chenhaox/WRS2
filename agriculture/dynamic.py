@@ -9,7 +9,7 @@ from wrs.scene.collision_shape import CapsuleCollisionShape, OBBCollisionShape
 from wrs.robots.base.mech_structure import MechStruct, Link, Joint
 from wrs.robots.base.mech_base import MechBase
 from wrs.physics.inertial import inertia_from_collisions, inertia_sphere
-from .geometry import leaf_batches, leaf_mesh
+from .geometry import leaf_batches, leaf_contact_boxes
 from .static import make_branch, make_fruit, validate_render_config
 
 
@@ -46,28 +46,23 @@ class DynamicPlantInstance:
 
     def summary(self):
         return self.spec.summary() | dict(dynamic_cluster_count=len(self.dynamics.clusters),
-            passive_dof=self.mech.ndof, foliage_proxy_count=sum(map(len, self.foliage_proxies.values())),
+            passive_dof=self.mech.ndof,
+            foliage_proxy_count=sum(len(obj.collisions) for group in self.foliage_proxies.values() for obj in group),
+            foliage_proxy_object_count=sum(map(len, self.foliage_proxies.values())),
             leaf_batch_count=len(self.leaf_objects), physics_link_count=len(self.mech.runtime_lnks))
 
 
 def _proxies(leaves, shape, frame, settings):
-    """1..3 boxes fit blade vertices in cluster axes, split along longest span.
-
-    This is a coarse contact envelope, not a claim of leaf-level contact fidelity.
-    """
-    if not leaves:
-        return []
-    points = [(leaf_mesh(p.length, p.width, shape)[0] @ np.asarray(p.rotmat).T + p.position - frame[:3, 3]) @ frame[:3, :3]
-              for p in leaves]
-    centers = np.array([p.mean(axis=0) for p in points])
-    axis = int(np.argmax(np.ptp(centers, axis=0)))
-    groups = np.array_split(np.argsort(centers[:, axis], kind='stable'), min(settings.per_cluster, len(leaves)))
+    """Leaf-aligned strip boxes expressed in their owning cluster frame."""
     result = []
-    for group in groups:
-        vertices = np.concatenate([points[i] for i in group])
-        lo, hi = vertices.min(axis=0), vertices.max(axis=0)
-        half = np.maximum((hi - lo) / 2 + settings.padding, settings.minimum_half_extent)
-        result.append(((lo + hi) / 2, half))
+    for leaf in leaves:
+        leaf_rotation = np.asarray(leaf.rotmat)
+        for center, rotation, half in leaf_contact_boxes(leaf.length, leaf.width, shape,
+                sections=settings.sections_per_leaf, padding=settings.padding,
+                minimum_thickness=settings.minimum_thickness):
+            center = frame[:3, :3].T @ (leaf_rotation @ center + leaf.position - frame[:3, 3])
+            rotation = frame[:3, :3].T @ leaf_rotation @ rotation
+            result.append((center, rotation, half))
     return result
 
 
@@ -151,15 +146,18 @@ class DynamicPlantBuilder:
             if owner is None:
                 continue
             proxies[owner] = []
-            for i, (center, half) in enumerate(_proxies(placements, spec.leaf_shape, frame, dynamics.foliage_proxy)):
-                obj = wsso.SceneObject(name=f'foliage_proxy_{owner}_{i}')
-                shape = OBBCollisionShape(half_extents=half)
-                obj.add_collision(shape)
+            if placements:
+                # One compound object per cluster, not one SceneObject/body per
+                # leaf. Each leaf keeps its own local gaps and thin contact strips.
+                obj = wsso.SceneObject(name=f'foliage_proxy_{owner}')
+                for center, rotation, half in _proxies(placements, spec.leaf_shape, frame, dynamics.foliage_proxy):
+                    shape = OBBCollisionShape(half_extents=half, pos=center, rotmat=rotation)
+                    obj.add_collision(shape)
+                    collision_roles[shape] = 'FOLIAGE'
                 # The cluster's explicit inertia already includes lumped leaves.
                 obj.set_inertia(np.zeros((3, 3)), np.zeros(3), 0.0)
-                mech.mount(obj, runtime[owner], wum.tf_from_pos_rotmat(center), update=True)
+                mech.mount(obj, runtime[owner], update=True)
                 proxies[owner].append(obj)
-                collision_roles[shape] = 'FOLIAGE'
         cluster_map = {c.id: c for c in ordered}
         for fruit in spec.fruits:
             owner = owners[fruit.parent_segment]

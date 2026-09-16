@@ -88,6 +88,42 @@ python -m unittest discover -s tests -p "test_fafu_robot_arm.py" -v
 python -m unittest discover -s tests -p "test_robot_citrus_interaction.py" -v
 ```
 
+## Citrus 中的 VirtualD405 安装
+
+`robot_citrus_interaction` 默认包含腕部 RGB-D；实现位于
+`examples/agriculture/fafu_d405.py`，不修改 FAFU 模型或 WRS core。
+参考 [FAFU SDK 的 fafu_baseV1_d405.urdf](https://github.com/FAFU-Robotics/fafu_arm_sdk/blob/4f4a246efe97c51ded89d3fd8a9b9a595238e77f/fafu_robot_python/fafu_robot_description/urdf/fafu_baseV1_d405.urdf)，
+固定提交 `4f4a246efe97c51ded89d3fd8a9b9a595238e77f`。其中 `tool_joint` 是
+`link6 -> tool_link` 的固定变换：xyz = `(0.170, 0, 0)` m，rpy = `(0, 0, 0)`。
+文件没有 camera link、optical frame 或相机标定外参；不能把文件名中的 d405 当作光学标定。
+
+当前 WRS 裸臂沿用旧模型的腕部轴约定：WRS flange 相对 URDF link6 旋转 `Ry(pi/2)`。
+因此 helper 使用 `T_flange_optical = Ry(-pi/2) @ T_link6_tool @ T_tool_optical`。
+这里 `T_A_B` 将 B 坐标转换到 A，所有平移单位为 metre。
+名义光轴指向 URDF tool +X，光学 +X = tool −Y，光学 +Y = tool −Z；
+光心相对 tool 位于 `(-0.050, 0.055, 0)`，后退并侧移以避开示例的蓝色触碰球。
+这两个偏移是可替换的示例安装估计，**不是从 URDF 提取的测量值**。
+
+默认合成的 `T_flange_optical` 为：
+
+```text
+ 0   1   0   0
+-1   0   0   0.055
+ 0   0   1   0.120
+ 0   0   0   1
+```
+
+`agriculture/configs/presets/lab_citrus_robot.json` 的 `robot_demo.d405` 集中保存来源、
+工具固定变换、`T_tool_optical`、采集频率、分辨率、量程和示意外壳尺寸。
+标定后替换 `T_tool_optical` 并重启；相机内参目前仍使用 VirtualD405 名义模型。
+`demo.camera` 通过原生 mount 随实际法兰移动；直接调用 `capture(scene)`，不再重复传入
+`T_world_mount`。RGB、depth 和反投影点云来自同一 DepthFrame，世界点云使用该帧保存的位姿。
+
+右侧面板显示 RGB、深度和点云统计，也可叠加世界坐标点云。
+点云仅有一个显示对象，刷新时替换；复位清除旧观测。传感器外壳及调试图形被排除在成像之外，
+外壳无碰撞/惯量，机械臂仍为 6 个 actuator，植物仍为 11 个 passive DOF。
+这提供虚拟腕部观测，不包含真实 D405 驱动、实测外参或视觉伺服。
+
 ## 来源
 
 源仓库：[blanketxx/wrs-sealp-assemble](https://github.com/blanketxx/wrs-sealp-assemble/tree/7260d56e7eba7176eabc23063210d341583671ae)，

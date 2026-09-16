@@ -16,8 +16,10 @@ class PushExperiment:
         target = plant.foliage_proxies[settings['cluster']][settings['proxy_index']]
         direction = plant.mech.rotmat @ np.asarray(settings['direction_local'], dtype=float)
         direction /= np.linalg.norm(direction)
-        extent = np.sum(np.abs(direction @ target.rotmat) * target.collisions[0].half_extents)
-        origin = target.pos - direction * (extent + settings['sphere_radius'] + settings['clearance'])
+        shape = target.collisions[settings['shape_index']]
+        shape_tf = target.tf @ shape.loc_tf
+        extent = np.sum(np.abs(direction @ shape_tf[:3, :3]) * shape.half_extents)
+        origin = shape_tf[:3, 3] - direction * (extent + settings['sphere_radius'] + settings['clearance'])
         root, probe = Link(), Link()
         root.name, probe.name = 'probe_base', 'probe'
         sphere = wssop.icosphere(radius=settings['sphere_radius'], rgb=(.2, .6, 1),
