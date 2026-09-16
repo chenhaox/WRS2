@@ -17,7 +17,7 @@
 .\.venv\Scripts\python.exe -m examples.agriculture.dynamic_citrus --case clusters
 .\.venv\Scripts\python.exe -m examples.agriculture.dynamic_citrus --case push
 
-# 机械臂关节滑块 + 实时叶簇/果实接触
+# FAFU 笛卡尔移动 + 实时叶簇/果实接触
 .\.venv\Scripts\python.exe -m examples.agriculture.robot_citrus_interaction
 
 # 确定性通用程序化路径
@@ -38,19 +38,27 @@
 
 ## 机械臂交互示例
 
-`robot_citrus_interaction.py` 使用现有 RS007L 和固定在法兰上的蓝色圆头触碰工具。
-左侧六个滑块的单位是 degree，范围取机械臂真实 joint limits。滑块改变位置伺服目标，
-目标以配置的最大角速度推进，机械臂实际位姿由 MuJoCo 更新；不会通过 FK 瞬移到叶簇内部。
-右侧显示实际角度、当前接触类别、植物偏转和下方果实的世界坐标。
+`robot_citrus_interaction.py` 使用现有 FAFURobotArm 裸臂和固定在法兰上的蓝色圆头触碰工具。
+机械臂安装在 0.30 m 高的底座上，树的尺度不变。左侧提供前后、左右、上下六个按钮，
+`Move per click` 调节每次移动 1～30 mm，默认 10 mm。方向使用固定世界坐标：
+前为 +Y（朝树）、后为 −Y、右为 +X、左为 −X、上为 +Z、下为 −Z，不随相机旋转改变。
+TCP 是蓝色球心，工具朝向保持固定。右侧显示目标/实际 TCP 坐标、接触类别、植物偏转和果实世界坐标。
+
+使用 WRS NumIKSolver，从相邻解出发检查整条直线路径；默认每 5 mm 一个 waypoint。
+关节解之间插值近似直线，同时限制 TCP 命令速度与各关节命令速度。UI 不直接修改 FK/qpos，
+机械臂实际位姿由 MuJoCo 位置伺服与接触共同决定，受重力和接触影响可有毫米级跟踪误差。
+越界、不可达或出现过大 IK 跳变时，整次请求被拒绝并显示原因，原目标/原路径保留。
+这不使用默认 SELIK，因此首次运行不生成采样数据库。
 
 可以先点击 **Touch leaves** 或 **Touch orange_000**，观察枝簇/果实让位，再点击
-**Retract / ready** 观察回弹。也可以直接拖动任意关节；**Pause physics** 暂停仿真，
+**Retract / ready** 观察回弹。**Stop motion / hold** 取消后续移动并保持当前伺服命令；
+**Pause physics** 暂停仿真，暂停时可调整待执行目标；
 **Reset robot and tree** 恢复初始化后的完整物理状态。复位保留暂停和显示开关状态。
 接触代理、机械臂/枝条/果实碰撞形状和接触力箭头均有独立显示开关。
 
 交互参数集中在 `configs/presets/lab_citrus_robot.json`，继承 lab citrus preset：
-机械臂基座、工具尺寸、示范目标、位置伺服增益、关节目标速度与相机均可调整。
-三个示范姿态由 WRS IK 在启动时求解，是便于探索的姿态，不是避障轨迹规划。
+机械臂基座、工具尺寸、示范目标、位置伺服增益、笛卡尔/关节速度、工作区与相机均可调整。
+示范目标同样走上述笛卡尔路径。它是便于探索接触的局部控制，不是避障轨迹规划。
 只有机械臂有六个 actuator，植物保持 11 个 passive DOF。叶片通过 V2 的枝簇代理接触；
 橙子仍与枝条刚性连接，不会抓取或脱落。触碰工具的 ACTIVE 碰撞角色显式设置，
 不会因为它是固定 mount 而与植物的 STATIC 角色互相过滤。
@@ -63,7 +71,10 @@ python -m examples.agriculture.robot_citrus_interaction --port 8001 --duration 3
 python -m unittest discover -s tests -p "test_robot_citrus_interaction.py" -v
 ```
 
-本例只新增示例、配置和回归测试，未修改 WRS core、RS007L 定义或现有植物动力学参数。
+未修改 WRS core、FAFU 的几何/关节定义或现有植物动力学参数。
+FAFU 可用于当前定性接触演示，但质量/惯量/电机参数尚未标定，原生双指夹爪的 mimic 也尚未
+转换成 MuJoCo 联动约束，因此本例使用圆头工具，不装双指夹爪。详细调查见
+[FAFU 支持范围](../docs/tutorials/fafu_robot_arm.md#用于-citrus-交互仿真的支持范围)。
 
 ## 数据与 API
 

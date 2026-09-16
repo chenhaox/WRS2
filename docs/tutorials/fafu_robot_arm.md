@@ -51,6 +51,43 @@ collided = collider.is_collided(arm.qs)
 - 保留全零 home 配置。裸臂无网格的法兰使用很小的数值惯性，供 MuJoCo 碰撞
   模型编译；其他网格也未做动力学校准，本迁移面向运动学、显示与碰撞规划。
 
+## 用于 Citrus 交互仿真的支持范围
+
+已在 `examples/agriculture/robot_citrus_interaction.py` 接入 **FAFURobotArm 裸臂**，
+使用法兰上固定的圆头工具，跑通 MuJoCo 真实叶簇/果实接触与撤回后的回弹。
+无需修改机械臂网格、关节定义或 WRS core。
+
+```powershell
+python -m examples.agriculture.robot_citrus_interaction
+python -m examples.agriculture.robot_citrus_interaction --headless --report fafu_contact.json
+```
+
+UI 使用固定世界坐标的六向笛卡尔移动，默认每次 10 mm，工具朝向固定。
+使用 `NumIKSolver` 和明确的相邻初值检查短距离 waypoint，随后通过有速度限制的
+MuJoCo 位置伺服执行。越界/不可达/IK 跳变时拒绝整条新路径，保留旧目标。
+`Touch leaves`、`Touch orange_000`、撤回、暂停和复位均可使用。
+
+| 模块 | 已有支持与当前限制 |
+| --- | --- |
+| 模型、FK、TCP、mount、clone | 已实现并有回归测试。无网格 link6 是法兰 frame 的有意设计，不是遗漏网格。 |
+| IK | 可使用现有 SELIK/NumIKSolver；交互例子显式用 NumIK，避免首次建库。局部数值 IK 不保证找到所有可达解，奇异点附近可能拒绝移动。 |
+| 碰撞与 MuJoCo 编译 | 裸臂与装配体都能编译；link2 用凸包规避 STL 面数限制。已验证裸臂带工具的动态接触。碰撞包络保守，不能视为精确零件接触几何。 |
+| 动力学参数 | **尚未标定**质量、质心、惯量、关节摩擦和电机性能。多数网格连杆未显式设置惯量，由 MuJoCo 从几何及默认密度估计；法兰仅有数值占位惯量。示例伺服增益是定性值，不代表真实 FAFU 响应或额定力矩。 |
+| 双指夹爪 | FK/mount/开口和碰撞规划可用；**物理 mimic 联动尚未接通**：当前转换器未输出 joint equality，装配体编译为 8 DOF、8 actuators、0 equality，而 WRS 夹爪运动学只有 1 个独立 DOF。不可直接据此宣称单驱动同步夹持仿真已完成。 |
+| 实机控制 | 本次迁移没有导入旧控制器，当前包没有对应的 FAFU 实机通信/执行接口。 |
+
+当前 Citrus 演示使用 6 个机械臂 actuator 和 11 个植物 passive DOF；蓝色工具无独立关节。
+模型在当前配置下可稳定推动枝簇和果实，能用于定性交互及路径探索；尚不支持真实硬件
+动力学预测、标定后的力控或物理双指抓取。后续若使用原夹爪，应先补通用 mimic→MuJoCo
+约束/驱动映射，再标定连杆与驱动参数；本次没有通过两个独立伺服伪装单驱动夹爪。
+
+验证命令：
+
+```powershell
+python -m unittest discover -s tests -p "test_fafu_robot_arm.py" -v
+python -m unittest discover -s tests -p "test_robot_citrus_interaction.py" -v
+```
+
 ## 来源
 
 源仓库：[blanketxx/wrs-sealp-assemble](https://github.com/blanketxx/wrs-sealp-assemble/tree/7260d56e7eba7176eabc23063210d341583671ae)，
