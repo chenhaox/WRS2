@@ -139,7 +139,9 @@ JSON 的 `color_intrinsics.K/dist` 保留在标定文件中，但没有图像分
 RGB-D 内参暂用 VirtualD405 名义模型。界面区分“calibrated mount / nominal intrinsics”。
 已应用的外参以用户提供的 frame 约定为依据，未独立验证实机标定误差。
 
-右侧显示 RGB、raw-like 深度、同色标的 clean 深度对照和点云统计，可叠加青色世界坐标点云。
+右侧显示 RGB 和一个深度图区域，点击 `Switch Clean / Noise` 切换同色标的噪声/干净深度，
+`Depth display` 显示当前模式，默认 Noise。切换使用最近一帧，不触发额外采样或重置噪声。
+另有点云统计，可叠加青色世界坐标点云。
 默认使用 `agriculture_foliage` 噪声：相关空洞、边缘错配、小幅视差误差和时序闪烁。
 `D405 holes / mismatch / temporal noise` 开关控制整套误差，sigma 滑块只控制正常视差精度；
 sigma=0 仍有空洞和错配。关闭噪声时直接复用 GPU 的理想 Z16/XYZ，保留量程和量化。

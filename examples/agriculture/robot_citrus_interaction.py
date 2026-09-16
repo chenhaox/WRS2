@@ -2,7 +2,7 @@
 
 TCP pose paths and gripper opening become rate-limited position-servo targets.
 The arm and fingers have actuators; the plant retains its passive V2 joints.
-The wrist camera shows raw-like agriculture noise alongside clean depth.
+The wrist camera switches between raw-like agriculture noise and clean depth.
 """
 from pathlib import Path
 import argparse
@@ -369,7 +369,7 @@ def add_controls(base, demo):
                             description='Hold a key or button to jog. World axes: +Y toward the tree, +X right, +Z up.')
     status = base.ui.add_panel('interaction', title='VirtualD405 / Citrus contact', anchor=Anchor.TOP_RIGHT,
                                width=340, font_size=12, movable=True,
-                               description='Live wrist RGB-D with foliage noise and clean-depth comparison. Black depth = invalid/out of range.')
+                               description='Live wrist RGB-D. Switch Clean / Noise to compare depth. Black depth = invalid/out of range.')
     demo.rgbd.add_controls(status)
     jog_step = [demo.settings['jog_step_m']]
     rotation_step = [2.0]
