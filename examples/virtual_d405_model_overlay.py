@@ -4,7 +4,8 @@ Run: python -m examples.virtual_d405_model_overlay
 Use the left panel for XYZ / roll-pitch-yaw, resolution, focal scale and mode.
 Click the 3-D view for W/S (+/-Z), A/D (-/+X), Q/E (-/+Y); R resets pose.
 Keys translate in world coordinates; mouse dragging orbits only the viewer.
-Resolution changes scale the example intrinsics to preserve the field of view.
+Resolution changes scale focal lengths uniformly to preserve square pixels;
+wider profiles extend the horizontal field of view. Previews use letterboxing.
 Camera body and optical axes are display-only, as in virtual_d405_rgbd.
 """
 import time
@@ -103,11 +104,12 @@ class OverlayDemo:
     @staticmethod
     def _make_camera(settings, pos, rotmat):
         width, height = map(int, settings['resolution'].split('x'))
-        # Scale pixel-center intrinsics with image dimensions, keeping FOV.
+        # Scale both focal lengths together: independent X/Y scaling would
+        # stretch objects when switching between 4:3 and widescreen profiles.
         # These are example values, not a real D405 calibration/profile.
+        focal = 600 * min(width / 640, height / 480) * settings['focal_scale']
         return VirtualD405(width=width, height=height,
-                           fx=600 * width / 640 * settings['focal_scale'],
-                           fy=600 * height / 480 * settings['focal_scale'],
+                           fx=focal, fy=focal,
                            fps=settings['fps'], mode=settings['mode'], pos=pos, rotmat=rotmat)
 
     def configure_camera(self, **changes):

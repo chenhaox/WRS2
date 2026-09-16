@@ -201,15 +201,26 @@
 .wrs-ui-panel .ui-label-value { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; white-space: pre-wrap; }
 .wrs-ui-panel .ui-image { display: grid; gap: 6px; }
 .wrs-ui-panel .ui-image-viewport {
+  position: relative;
   display: grid;
   place-items: center;
-  min-height: 80px;
+  min-width: 0;
+  aspect-ratio: 4 / 3;
   overflow: hidden;
   border-radius: 5px;
-  background: #18221e;
+  background: #000;
   color: #cad6cf;
 }
-.wrs-ui-panel .ui-image img { display: block; width: 100%; height: auto; }
+/* Keep the preview stable across resolutions; preserve all pixels with black bars. */
+.wrs-ui-panel .ui-image img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
 .wrs-ui-panel .ui-image[data-error='true'] .ui-image-viewport { outline: 1px solid #b35448; }
 .wrs-ui-panel .ui-footer {
   display: flex;
