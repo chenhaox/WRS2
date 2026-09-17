@@ -29,6 +29,15 @@ class MJCFCompiler:
             self.compile_site(s, wb)
         for child in world.root_body.children:
             self.compile_body(child, wb)
+        if world.connections:
+            tendon = ET.SubElement(mj, 'tendon')
+            for connection in world.connections:
+                spec = connection.spec
+                spatial = ET.SubElement(tendon, 'spatial', name=connection.name,
+                    stiffness=str(spec.stiffness), damping=str(spec.damping),
+                    springlength=str(spec.rest_length), limited='false', frictionloss='0', armature='0')
+                for site in connection.sites:
+                    ET.SubElement(spatial, 'site', site=site.name)
         if world.actuators:
             act_el = ET.SubElement(mj, "actuator")
             for a in world.actuators:

@@ -50,6 +50,9 @@ class RobotPlantInteraction:
     def __init__(self, config=None):
         config = load_config(DEFAULT_CONFIG) if config is None else config
         self.settings = p = config['robot_demo']
+        self.harvest_settings = config.get('harvest_demo', {})
+        self.substep_observers = []
+        self.reset_observers = []
         self.scene = wss.Scene()
         size = np.asarray(p['ground_size'])
         ground = wssop.box(pos=(*p['ground_center_xy'], -size[2] / 2), xyz_lengths=size,
@@ -104,10 +107,19 @@ class RobotPlantInteraction:
         model.actuator_gainprm[self.actuators, 0] = p['servo_kp']
         model.actuator_biasprm[self.actuators, 1] = -np.asarray(p['servo_kp'])
         model.actuator_biasprm[self.actuators, 2] = -np.asarray(p['servo_kv'])
-        model.actuator_gainprm[self.gripper_actuators, 0] = 800
-        model.actuator_biasprm[self.gripper_actuators, 1:3] = [-800, -10]
+        finger_kp = self.harvest_settings.get('finger_kp_N_m', 800.)
+        finger_kv = self.harvest_settings.get('finger_kv_N_s_m', 10.)
+        finger_force = self.harvest_settings.get('finger_force_N', 20.)
+        model.actuator_gainprm[self.gripper_actuators, 0] = finger_kp
+        model.actuator_biasprm[self.gripper_actuators, 1:3] = [-finger_kp, -finger_kv]
         model.actuator_forcelimited[self.gripper_actuators] = True
-        model.actuator_forcerange[self.gripper_actuators] = [-20, 20]
+        model.actuator_forcerange[self.gripper_actuators] = [-finger_force, finger_force]
+        if self.harvest_settings:
+            from examples.agriculture.harvest_diagnostics import configure_grasp_contacts
+            configure_grasp_contacts(self.env, self.gripper, self.plant.fruit_objects, self.harvest_settings)
+            limits = np.asarray(self.harvest_settings['arm_force_limits_Nm'])
+            model.actuator_forcelimited[self.actuators] = True
+            model.actuator_forcerange[self.actuators] = np.column_stack((-limits, limits))
         model.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
         self.command = self._ready_q.copy()
         self.command_position = self.presets['ready'].copy()
@@ -129,9 +141,7 @@ class RobotPlantInteraction:
         self.contacts = {}
         self.contact_samples = {}
         self.step(p['settle_seconds'])
-        self._state_kind = mujoco.mjtState.mjSTATE_INTEGRATION
-        self._initial_state = np.empty(mujoco.mj_stateSize(model, self._state_kind))
-        mujoco.mj_getState(model, self.env.data, self._initial_state, self._state_kind)
+        self._initial_state = self.env.snapshot()
         self._initial_time = self.env.data.time
         self._initial_fruit = {key: obj.pos.copy() for key, obj in self.plant.fruits.items()}
         self._initial_plant_q = self.plant.mech.qs.copy()
@@ -299,8 +309,7 @@ class RobotPlantInteraction:
             self.contact_samples[role] = self.contact_samples.get(role, 0) + count
 
     def _sync_scene(self):
-        self.env.sync.pull_all_sobj_pose()
-        self.env.sync.pull_all_mecba_qpos()
+        self.env.sync_scene()
         if self.show_forces:
             self.env.contact_viz.update_from_data(self.env.model, self.env.data)
         else:
@@ -318,17 +327,20 @@ class RobotPlantInteraction:
         for _ in range(n):
             self._advance_command(h)
             self.env.ctrl[self.actuators] = self.command
-            # 40 mm/s total opening, with 20 N force limits on each finger.
-            self.gripper_command += np.clip(self.gripper_target - self.gripper_command, -.04 * h, .04 * h)
+            opening_step = self.harvest_settings.get('opening_speed_m_s', .04) * h
+            self.gripper_command += np.clip(self.gripper_target - self.gripper_command, -opening_step, opening_step)
             self.env.ctrl[self.gripper_actuators] = self.gripper_command / 2
             self.env.runtime.step()
             self._read_contacts()
+            for observer in self.substep_observers:
+                observer(self)
         # Physics runs at its native timestep; publish rigid mounts once per frame.
         self._sync_scene()
 
     def reset(self):
-        mujoco.mj_setState(self.env.model, self.env.data, self._initial_state, self._state_kind)
-        self.env.runtime.forward()
+        self.env.restore(self._initial_state)
+        force = self.harvest_settings.get('finger_force_N', 20.)
+        self.env.model.actuator_forcerange[self.gripper_actuators] = [-force, force]
         self.command = self._ready_q.copy()
         self.command_position = self.presets['ready'].copy()
         self.command_rotation = self.tool_rotation.copy()
@@ -338,6 +350,8 @@ class RobotPlantInteraction:
         self.contacts, self.contact_samples = {}, {}
         self._sync_scene()
         self.rgbd.invalidate()
+        for observer in self.reset_observers:
+            observer(self)
 
     def capture_rgbd(self, dt=0):
         return self.rgbd.capture(simulation_time=float(self.env.data.time - self._initial_time))
@@ -355,6 +369,8 @@ class RobotPlantInteraction:
                     tcp_target_m=self.target_position.tolist(), tcp_actual_m=self.tcp.pos.tolist(),
                     gripper_opening_m=float(np.sum(self.gripper.qs)), gripper_target_m=self.gripper_target,
                     gripper_actuators=len(self.gripper_actuators), gripper_mode='position_servo',
+                    attachments={key: self.env.connection(c).report()
+                                 for key, c in self.plant.fruit_connections.items()},
                     T_flange_cam=self.rgbd.mount_tf.tolist(),
                     motion_status=self.motion_status,
                     plant_deflection_rad=float(np.linalg.norm(self.plant.mech.qs - self._initial_plant_q)),
@@ -475,6 +491,7 @@ def add_controls(base, demo):
     base.schedule_interval(refresh, 1 / demo.settings['status_hz'])
     demo.capture_rgbd()
     base.schedule_interval(demo.capture_rgbd, 1 / demo.camera.fps)
+    return arm, status
 
 
 def run_smoke(demo, *, capture_rgbd=False):

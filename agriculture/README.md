@@ -3,6 +3,7 @@
 轻量植物几何与 WRS 构建适配层。当前真正支持实验室 citrus reference tree、通用程序化树、
 静态构建以及少量 branch-cluster 被动弯曲。没有引入 Newton、Warp、外部植物资产或新的依赖。
 完整设计、OrchardBench 阅读记录、core 变更和范围见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+新增的独立果实、原生 tendon 弹性连接、真实夹爪拉脱与 A/B/C 验证见 [HARVEST.md](HARVEST.md)。
 
 ## 运行
 
@@ -19,6 +20,9 @@
 
 # FAFU 笛卡尔移动 + 实时叶簇/果实接触
 .\.venv\Scripts\python.exe -m examples.agriculture.robot_citrus_interaction
+
+# 果梗弹性拉脱：左侧滚动到 Harvest，区分抓持和连接状态
+.\.venv\Scripts\python.exe -m examples.agriculture.fruit_harvest
 
 # 确定性通用程序化路径
 .\.venv\Scripts\python.exe -m examples.agriculture.generic_plant_demo --seed 7
@@ -39,7 +43,7 @@
 ## 机械臂交互示例
 
 `robot_citrus_interaction.py` 使用 FAFURobotArm 和仓库原生 FAFUGripper 的掌部、双指网格及碰撞模型。
-本例夹爪保持 50 mm 固定开口，启动前可调整 `robot_demo.gripper.opening_m`（0～85 mm）。
+本例夹爪使用两个独立限力位置伺服手指，初始开口由 `robot_demo.gripper.opening_m`（0～85 mm）决定。
 机械臂安装在 0.30 m 高的底座上，树的尺度不变。左侧提供前后、左右、上下六个按钮，
 `Move per click` 调节每次移动 1～30 mm，默认 10 mm。方向使用固定世界坐标：
 前为 +Y（朝树）、后为 −Y、右为 +X、左为 −X、上为 +Z、下为 −Z，不随相机旋转改变。
@@ -72,8 +76,9 @@ TCP 是夹爪抓取中心，位于法兰 +Z 前方 170 mm，朝向保持固定�
 机械臂基座、夹爪开口、示范目标、位置伺服增益、笛卡尔/关节速度、工作区与相机均可调整。
 触碰预设从 `gripper.contact_link` 指定手指的原生网格提取指尖，将实际指尖对准表面。
 示范目标同样走上述笛卡尔路径。它是便于探索接触的局部控制，不是避障轨迹规划。
-只有机械臂有六个 actuator，植物使用 19 个 passive DOF。叶片通过 V2 的枝簇代理接触；
-橙子仍与枝条刚性连接，不会抓取或脱落。夹爪连杆沿用原生 ACTIVE 碰撞角色，
+机械臂有六个 actuator，双指有两个 actuator，植物使用 19 个 passive DOF。叶片通过 V2 的枝簇代理接触；
+原 contact preset 的橙子仍与枝条刚性连接；`fruit_harvest` 使用独立 free fruit 和可断轴向弹性连接。
+夹爪连杆沿用原生 ACTIVE 碰撞角色，
 手指与掌部参加真实接触；相机示意外壳只有视觉。
 
 无界面接触与撤回验证、或限制 viewer 运行时间：
@@ -84,10 +89,10 @@ python -m examples.agriculture.robot_citrus_interaction --port 8001 --duration 3
 python -m unittest discover -s tests -p "test_robot_citrus_interaction.py" -v
 ```
 
-本次未修改 WRS 物理转换器、原始 STL 或植物动力学参数。
-FAFUGripper 增加可选 `fixed_opening`：为该实例把双指位置写入固定关节，默认可动模型保持不变。
-FAFU 的质量/惯量/电机参数尚未标定，原生双指 mimic 尚未转换成 MuJoCo 联动约束，
-所以本例提供固定开口接触，不提供物理开合抓取。详细调查见
+FAFU 的质量/惯量/电机参数尚未标定。交互例子的双指取消 kinematic mimic，使用相同目标的
+独立 native 位置伺服，允许真实接触导致的非对称开度；原始 STL 不变。
+`fixed_opening` 可选模式仍保留。拉脱新增的通用 physics 能力及限幅/摩擦说明见 [HARVEST.md](HARVEST.md)。
+机器人支持范围见
 [FAFU 支持范围](../docs/tutorials/fafu_robot_arm.md#用于-citrus-交互仿真的支持范围)。
 
 ### 腕部 VirtualD405

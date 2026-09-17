@@ -140,12 +140,12 @@ def make_branch(branch, visual, scale=1.0):
     return obj
 
 
-def make_fruit(fruit, visual):
+def make_fruit(fruit, visual, *, include_stem=True):
     obj = wssop.icosphere(pos=fruit.position, radius=fruit.radius,
                          subdivisions=visual["fruit_subdivisions"],
                          rgb=visual["fruit_color"], name=fruit.id)
     obj.add_collision(wsc.SphereCollisionShape(radius=fruit.radius))
-    if fruit.stem_length > 0:
+    if include_stem and fruit.stem_length > 0:
         direction = np.asarray(fruit.stem_direction)
         obj.add_visual(wsrmp.gen_cylinder_rmodel(
             length=fruit.stem_length, radius=fruit.stem_radius,

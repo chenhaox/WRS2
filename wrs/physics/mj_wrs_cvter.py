@@ -50,7 +50,6 @@ class MJWRSConverter:
             if mecba in self._mounted_children:
                 continue
             robot = self._cvt_robot(mecba)
-            self._merge_empty_geoms(robot, is_root=True)
             robot.parent = root
             root.children.append(robot)
         for sobj in scene.sobjs:
@@ -71,6 +70,23 @@ class MJWRSConverter:
             root.children.append(body)
         world.assets = list(self._mesh_assets.values())
         world.actuators = self._actuators
+        # Attach sites in the original body frames BEFORE folding empty bodies.
+        # Site names survive aliasing; the folding code preserves their frames.
+        from wrs.physics.connections import LinearSpringConnectionSpec
+        for spec in scene.connections:
+            if not isinstance(spec, LinearSpringConnectionSpec):
+                raise TypeError('unsupported physics connection')
+            sites = []
+            for anchor in (spec.anchor_a, spec.anchor_b):
+                body = root if anchor.body is None else self._lookup_body_node(anchor.body)
+                site = wpmno.SiteNode(wpmna.alloc_name('spring_site'))
+                site.pos = anchor.local_pos
+                site.rgba = (0, 0, 0, 0)
+                body.sites.append(site)
+                sites.append(site)
+            world.connections.append(wpmno.SpatialSpringNode(wpmna.alloc_name('spring'), spec, sites))
+        for robot in root.children:
+            self._merge_empty_geoms(robot, is_root=True)
         self._finalize_alias_maps()
         # process collision ignores
         for mecba in scene.mecbas:
@@ -320,6 +336,11 @@ class MJWRSConverter:
         ctfmat = wum.tf_from_pos_rotmat(body.pos,
                                         wum.rotmat_from_quat(body.quat))
         newtfmat = ptfmat @ ctfmat
+        # Parent moves onto the child frame; its existing sites must not move in
+        # world space. Child sites are already expressed in the destination frame.
+        for site in parent.sites:
+            tf = np.linalg.inv(ctfmat) @ wum.tf_from_pos_rotmat(site.pos, wum.rotmat_from_quat(site.quat))
+            site.pos, site.quat = wum.pos_quat_from_tf(tf)
         parent.pos, parent.quat = wum.pos_quat_from_tf(newtfmat)
         if merge == 1:
             parent.geoms.extend(body.geoms)
@@ -344,18 +365,18 @@ class MJWRSConverter:
         return b
 
     def _lookup_body_node(self, sobj):
-        """The (finalized) BodyNode for a converted runtime Link or SceneObject
-        -- both body maps are keyed by the object itself. Call only after the
-        maps are finalized. Asserts rather than returns None, so a stray exclude
-        referencing an unconverted object fails loudly instead of silently."""
+        """BodyNode for an existing runtime Link/SceneObject, keyed by identity.
+
+        Before folding, anchors use the original frame. After finalizing aliases,
+        collision excludes use the surviving body. Missing bodies fail loudly.
+        """
         b = self._rutl2bdy.get(sobj)
         if b is None:
             b = self._sobj2bdy.get(sobj)
         assert sobj not in self._sobj2site, (
-            f"extra_excludes references {sobj!r}, which carries no collision "
-            f"geometry and was converted to a marker site -- it takes part in no "
-            f"contact, so there is nothing to exclude")
+            f"body reference {sobj!r} was converted to a marker site; "
+            f"reference its actual parent body instead")
         assert b is not None, (
-            f"extra_excludes references {sobj!r}, which has no body in the "
+            f"body reference {sobj!r} has no body in the "
             f"model (not a converted link / scene object)")
         return b

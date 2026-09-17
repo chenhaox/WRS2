@@ -11,6 +11,7 @@ class WorldNode:
         self.sensors = []
         self.actuators = []
         self.contact_excludes = []
+        self.connections = []
         self._compiler = mjc.MJCFCompiler()
 
     def compile_mjcf(self):
@@ -129,6 +130,12 @@ class SiteNode:
         self.pos = (0, 0, 0)
         self.quat = (0, 0, 0, 1)
         self.rgba = None
+
+
+class SpatialSpringNode:
+    """Exactly two sites; no wrapping, constraints, or tendon actuator."""
+    def __init__(self, name, spec, sites):
+        self.name, self.spec, self.sites = name, spec, sites
 
 
 class ActuatorNode:

@@ -9,6 +9,19 @@ class Scene:
         self._sobjs = []
         self._lnks = []
         self._mecbas = []
+        self._connections = []
+        self.physics_sync_callbacks = []
+
+    @property
+    def connections(self):
+        return tuple(self._connections)
+
+    def add_connection(self, connection):
+        if connection not in self._connections:
+            self._connections.append(connection)
+
+    def remove_connection(self, connection):
+        self._connections.remove(connection)
 
     def __iter__(self):  # for rendering order
         # a FLAT set: everything renderable is registered here directly. A

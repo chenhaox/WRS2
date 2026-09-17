@@ -1,4 +1,4 @@
-"""PlantSpec + cluster dynamics -> ordinary WRS MechBase with rigid mounts.
+"""PlantSpec + cluster dynamics -> WRS links, optionally free attached fruits.
 
 No MJCF strings, engine body IDs, plant controllers, or per-leaf bodies here.
 """
@@ -11,6 +11,7 @@ from wrs.robots.base.mech_base import MechBase
 from wrs.physics.inertial import inertia_from_collisions, inertia_sphere
 from .geometry import leaf_batches, leaf_contact_boxes
 from .static import make_branch, make_fruit, validate_render_config
+from .attachment import FruitAttachmentSettings, make_attachment, update_stem
 
 
 @dataclass
@@ -29,6 +30,9 @@ class DynamicPlantInstance:
     leaf_clusters: dict
     cluster_frames: dict
     foliage_proxy_visuals: list = field(default_factory=list)
+    fruit_connections: dict = field(default_factory=dict)
+    stem_objects: dict = field(default_factory=dict)
+    _scenes: list = field(default_factory=list, repr=False)
 
     @property
     def fruit_objects(self):
@@ -36,14 +40,43 @@ class DynamicPlantInstance:
 
     def add_to_scene(self, scene):
         self.mech.add_to_scene(scene)
+        if scene not in self._scenes:
+            self._scenes.append(scene)
+            for key, connection in self.fruit_connections.items():
+                self.fruits[key].add_to_scene(scene)
+                self.stem_objects[key].add_to_scene(scene)
+                scene.add_connection(connection)
+            if self.fruit_connections:
+                scene.physics_sync_callbacks.append(self.update_attachment_visuals)
         return self
 
     def remove_from_scene(self, scene):
+        if scene in self._scenes:
+            for key, connection in self.fruit_connections.items():
+                scene.remove_connection(connection)
+                self.fruits[key].remove_from_scene(scene)
+                self.stem_objects[key].remove_from_scene(scene)
+            if self.fruit_connections:
+                scene.physics_sync_callbacks.remove(self.update_attachment_visuals)
+            self._scenes.remove(scene)
         self.mech.remove_from_scene(scene)
 
     def set_pos_rotmat(self, pos=None, rotmat=None):
+        if self.fruit_connections and self._scenes:
+            raise RuntimeError('Place a detachable plant before add_to_scene; physics owns its fruit poses afterwards')
+        previous = self.mech.tf
         self.mech.set_pos_rotmat(pos, rotmat)
+        delta = self.mech.tf @ np.linalg.inv(previous)
+        for key, connection in self.fruit_connections.items():
+            self.fruits[key].tf = delta @ self.fruits[key].tf
+            self.stem_objects[key].tf = delta @ self.stem_objects[key].tf
         return self
+
+    def update_attachment_visuals(self, env):
+        for key, connection in self.fruit_connections.items():
+            handle = env.connection(connection)
+            a, b = env.data.site_xpos[list(handle.site_ids)]
+            update_stem(self.stem_objects[key], a, b, handle.attached)
 
     def show_foliage_proxies(self, visible=True):
         """Draw the exact contact boxes in one debug mesh per compound body.
@@ -110,6 +143,7 @@ class DynamicPlantBuilder:
     def build(self, spec, dynamics, *, pos=None, rotmat=None):
         dynamics.validate(spec)
         visual = validate_render_config(spec, self.config)
+        attachment = FruitAttachmentSettings(**self.config.get('fruit_attachment', {}))
         owners, by_id = dynamics.segment_clusters(spec), spec.skeleton.by_id
         ordered = sorted(dynamics.clusters, key=lambda c: spec.skeleton.depth(c.root_segment))
         frames = {None: np.eye(4)}
@@ -196,19 +230,30 @@ class DynamicPlantBuilder:
                 mech.mount(obj, runtime[owner], update=True)
                 proxies[owner].append(obj)
         cluster_map = {c.id: c for c in ordered}
+        connections, stems = {}, {}
         for fruit in spec.fruits:
             owner = owners[fruit.parent_segment]
-            obj = make_fruit(fruit, visual)
-            if owner is not None:
-                density = dynamics.profiles[cluster_map[owner].profile].fruit_density
+            detachable = attachment.mode == 'breakable_axial'
+            obj = make_fruit(fruit, visual, include_stem=not detachable)
+            if owner is not None or detachable:
+                density = (attachment.density_kg_m3 if detachable else
+                           dynamics.profiles[cluster_map[owner].profile].fruit_density)
                 mass = density * 4 / 3 * np.pi * fruit.radius ** 3
                 obj.set_inertia(inertia_sphere(mass, fruit.radius), np.zeros(3), mass)
             local = np.linalg.inv(frames[owner]) @ wum.tf_from_pos_rotmat(fruit.position)
-            mech.mount(obj, runtime[owner], local, update=True)
+            if detachable:
+                obj.is_floating = True
+                obj.collision_group = wuc.CollisionGroup.ACTIVE
+                obj.tf = runtime[owner].tf @ local
+                connections[fruit.id], stems[fruit.id] = make_attachment(fruit, by_id[fruit.parent_segment],
+                    runtime[owner], frames[owner], obj, attachment, visual)
+            else:
+                mech.mount(obj, runtime[owner], local, update=True)
             fruits[fruit.id] = obj
             collision_roles[obj.collisions[0]] = 'FRUIT'
         semantics = dict(TRUNK=[runtime[None]], HARD_BRANCH=[runtime[None]],
                          COMPLIANT_BRANCH=[runtime[c.id] for c in ordered],
                          FOLIAGE=[obj for group in proxies.values() for obj in group], FRUIT=list(fruits.values()))
         return DynamicPlantInstance(spec, dynamics, mech, runtime, list(runtime.values()), leaves, fruits,
-                                    proxies, semantics, collision_roles, owners, leaf_owners, frames)
+                                    proxies, semantics, collision_roles, owners, leaf_owners, frames,
+                                    fruit_connections=connections, stem_objects=stems)

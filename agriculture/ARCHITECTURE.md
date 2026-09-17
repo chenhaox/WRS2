@@ -1,5 +1,9 @@
 # Citrus V2 implementation notes
 
+本文记录最初的 cluster V2 实现，以下 rigid fruit / 未实现 breaking 的描述属于该基线。
+当前可选的 `breakable_axial` 适配、WRS 通用连接和 reset/substep 语义见 [HARVEST.md](HARVEST.md)；
+默认 rigid 模式保持兼容，既有 passive joint 能力没有重新实现。
+
 ## Audit before implementation
 
 已阅读 V1 全部模块、两套配置和文档，以及 SceneObject / primitive / RenderModel /

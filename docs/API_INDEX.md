@@ -305,6 +305,13 @@ _Time-optimal retiming of a joint waypoint path (Kunz-Stilman style)._
 - `inertia_capsule(m, r, h)`
 - `inertia_from_collisions(collisions, total_mass=10.0)`
 
+## `wrs.physics.connections`
+
+- **class `BodyAnchor(body, local_pos=(0, 0, 0))`** — Body-local metres; `body=None` is world.
+- **class `LinearSpringConnectionSpec(name, anchor_a, anchor_b, rest_length, stiffness, damping, break_policy=None)`** — Native two-site axial spring; no engine IDs in the specification.
+- **class `TensileBreakPolicy(break_force, overload_hold_s)`** — N and seconds of consecutive overload.
+- **class `RuntimeConnectionHandle`** — Per-runtime `attached`, `extension`, `velocity`, `tension`, `events`, `report()`.
+
 ## `wrs.physics.mj_compiler`
 
 - **class `MJCFCompiler`**
@@ -321,7 +328,7 @@ _Time-optimal retiming of a joint waypoint path (Kunz-Stilman style)._
 ## `wrs.physics.mj_env`
 
 - **class `MJEnv`**
-  - methods: `step`, `is_collided`, `reset`, `get_timestep`, `save`, `data`, `model`, `ctrl`
+  - methods: `step`, `is_collided`, `reset`, `snapshot`, `restore`, `sync_scene`, `connection`, `get_timestep`, `save`, `data`, `model`, `ctrl`
 
 ## `wrs.physics.mj_naming`
 
@@ -341,12 +348,14 @@ _Time-optimal retiming of a joint waypoint path (Kunz-Stilman style)._
 - **class `InertialNode`**
 - **class `GeomNode`**
 - **class `SiteNode`** — A massless, non-colliding marker frame rigidly attached to a body.
+- **class `SpatialSpringNode`** — Two sites and a generic linear spring specification.
 - **class `ActuatorNode`**
 
 ## `wrs.physics.mj_runtime`
 
 - **class `MJRuntime`**
-  - methods: `step`, `forward`, `enter_cd`, `exit_cd`, `is_collided`
+  - methods: `step`, `forward`, `enter_cd`, `exit_cd`, `is_collided`, `snapshot`, `restore`, `reset`, `save_reset_state`
+  - `step(N)` evaluates connection rupture after each native physics substep. `forward()` never advances rupture time. Snapshots include mutable tendon parameters and connection history.
 
 ## `wrs.physics.mj_wrs_cvter`
 
@@ -706,7 +715,8 @@ _Mesh geometry operations on raw (vertices, faces) arrays: surface_
 ## `wrs.scene.scene`
 
 - **class `Scene`**
-  - methods: `add`, `remove`, `sobjs`, `lnks`, `mecbas`
+  - methods: `add`, `remove`, `sobjs`, `lnks`, `mecbas`, `add_connection`, `remove_connection`, `connections`
+  - `physics_sync_callbacks`: callbacks receiving `MJEnv` after physics poses are published, including reset/restore.
 
 ## `wrs.scene.scene_object`
 
